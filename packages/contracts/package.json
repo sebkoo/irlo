@@ -1,11 +1,17 @@
 {
-  "name": "@irlo/server",
+  "name": "@irlo/contracts",
   "version": "0.0.0",
   "private": true,
-  "description": "Irlo backend — Node.js/TypeScript membership, payments, and realtime services.",
+  "description": "Shared zod contracts — the single source of truth for API shapes across server and clients.",
   "license": "MIT",
   "author": "Ben Koo <seb.m.koo@gmail.com>",
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
   "engines": {
     "node": ">=24"
   },
@@ -14,8 +20,10 @@
     "lint": "eslint .",
     "format": "prettier --check .",
     "test": "vitest run",
-    "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -24,11 +32,8 @@
     "eslint": "^10.7.0",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.9.5",
-    "typescript": "^6.0.3",
+    "typescript": "~6.0.3",
     "typescript-eslint": "^8.63.0",
     "vitest": "^4.1.10"
-  },
-  "dependencies": {
-    "@irlo/contracts": "workspace:*"
   }
 }
