@@ -1,0 +1,6 @@
+# Toolchain pins — one source of truth per tool:
+#   node + pnpm        → mise (this file; honored locally and in CI via mise-action)
+#   xcodegen, swiftlint, swiftformat, ffmpeg → Brewfile (macOS-only tools)
+[tools]
+node = "24"
+pnpm = "10"
