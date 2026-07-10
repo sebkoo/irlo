@@ -1,0 +1,11 @@
+{
+  "name": "irlo-monorepo",
+  "private": true,
+  "description": "Irlo — swipe into real life. Backend-first open-source platform for real-world meetups.",
+  "license": "MIT",
+  "author": "Ben Koo <seb.m.koo@gmail.com>",
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@10.34.4"
+}
