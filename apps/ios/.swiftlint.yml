@@ -1,5 +1,7 @@
 included:
   - Irlo
+  - IrloTests
+  - IrloUITests
 
 opt_in_rules:
   - force_unwrapping # CLAUDE.md convention: no force-unwraps in production code
