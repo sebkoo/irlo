@@ -1,0 +1,9 @@
+included:
+  - Irlo
+
+opt_in_rules:
+  - force_unwrapping # CLAUDE.md convention: no force-unwraps in production code
+
+line_length:
+  warning: 120
+  error: 160
