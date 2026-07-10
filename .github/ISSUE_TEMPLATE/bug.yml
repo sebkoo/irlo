@@ -1,0 +1,72 @@
+name: Bug report
+description: Something is broken or behaving unexpectedly.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! Irlo is at Stage 0 (scaffolding + canary tests),
+        so most bugs today concern tooling, builds, tests, or docs.
+        **Security issues?** Please follow [SECURITY.md](https://github.com/sebkoo/irlo/blob/main/SECURITY.md) instead — do not file them here.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One sentence describing the problem.
+      placeholder: "`make test-ios` fails when no iPhone 16 Pro simulator is installed"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands or actions, in order, from a fresh checkout where possible.
+      placeholder: |
+        1. git clone https://github.com/sebkoo/irlo.git && cd irlo
+        2. make bootstrap
+        3. make test
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead. Include the exact error message where possible.
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      description: Which part of the repo is affected?
+      options:
+        - server
+        - contracts
+        - ios
+        - docs
+        - ci
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS and tool versions — whatever is relevant to the failure.
+      placeholder: "macOS 15.5, Node 24 (mise), pnpm 10, Xcode 16.4"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant terminal output. Rendered as code automatically — no backticks needed.
+      render: shell
+    validations:
+      required: false

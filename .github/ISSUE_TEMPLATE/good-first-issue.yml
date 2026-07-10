@@ -1,0 +1,58 @@
+name: Good first issue (maintainers)
+description: Seed a scoped starter task for new contributors.
+labels: ["good first issue"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Maintainer template for seeding starter tasks. A good first issue is small,
+        test-first, and fully specified — a newcomer should never have to guess.
+  - type: textarea
+    id: task
+    attributes:
+      label: Task description
+      description: What needs doing and why it matters. Link the story (US-XX), ADR, or doc it serves.
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Files to touch
+      description: The specific paths a contributor will create or edit.
+      placeholder: |
+        - packages/contracts/src/…
+        - server/src/…
+        - server/test/…
+    validations:
+      required: true
+  - type: textarea
+    id: tests-first
+    attributes:
+      label: Named test(s) to write first
+      description: TDD applies — name the failing spec(s) that start the triplet.
+      placeholder: |
+        - server/test/health.test.ts → "rejects a payload missing `status`"
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Definition of done
+      description: The checklist a reviewer will verify. Edit as needed.
+      value: |
+        - [ ] Failing test committed first (`test(scope): …`), then green (`feat(scope): …`)
+        - [ ] `make test` and `make lint` pass locally
+        - [ ] Coverage gates still met
+        - [ ] Docs updated if behavior or conventions changed
+    validations:
+      required: true
+  - type: textarea
+    id: mentorship
+    attributes:
+      label: Mentorship note
+      description: Who will guide the contributor, and where to ask questions.
+      value: |
+        A maintainer will respond within a few days and is happy to pair on the first
+        failing test. Ask questions right here on the issue — there are no silly ones.
+    validations:
+      required: false
