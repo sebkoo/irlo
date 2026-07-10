@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    name: Server (typecheck · lint · test · coverage)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      # Installs node + pnpm exactly as pinned in .mise.toml — one toolchain
+      # source of truth for laptops and CI.
+      - uses: jdx/mise-action@v4
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r typecheck
+      - run: pnpm -r lint
+      - run: pnpm -r format
+      - run: pnpm -r test:coverage
+
+      - name: Upload coverage (flag server)
+        uses: codecov/codecov-action@v7
+        with:
+          files: server/coverage/lcov.info,packages/contracts/coverage/lcov.info
+          flags: server
+          fail_ci_if_error: false
+
+  ios:
+    name: iOS (build · test · coverage)
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      # Never assume a device name exists on the runner image — pick the
+      # first available iPhone on the newest installed iOS runtime, from
+      # evidence (`simctl list`), and fail loudly with the full list if none.
+      - name: Select simulator
+        id: sim
+        run: |
+          xcrun simctl list devices available
+          UDID=$(xcrun simctl list devices available --json | jq -r '
+            [ .devices
+              | to_entries[]
+              | select(.key | startswith("com.apple.CoreSimulator.SimRuntime.iOS"))
+              | .key as $runtime
+              | .value[]
+              | select(.isAvailable and (.name | test("^iPhone")))
+              | {udid, runtime: $runtime, name}
+            ] | sort_by(.runtime) | last | .udid // empty')
+          if [ -z "$UDID" ]; then
+            echo "::error::No available iPhone simulator on this runner"
+            exit 1
+          fi
+          echo "Selected simulator UDID: $UDID"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Run iOS tests
+        run: >
+          make test-ios
+          IOS_DEST="platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}"
+          IOS_TEST_EXTRA_ARGS="-resultBundlePath ${{ github.workspace }}/TestResults.xcresult"
+
+      - name: Convert coverage to Cobertura
+        run: |
+          brew install xcresultparser
+          xcresultparser --output-format cobertura TestResults.xcresult > coverage-ios.xml
+
+      - name: Upload coverage (flag ios)
+        uses: codecov/codecov-action@v7
+        with:
+          files: coverage-ios.xml
+          flags: ios
+          fail_ci_if_error: false
+
+      - name: Upload result bundle
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-test-results
+          path: TestResults.xcresult
