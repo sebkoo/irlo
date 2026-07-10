@@ -29,3 +29,28 @@ targets:
                 UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
     scheme:
       gatherCoverageData: true
+      testTargets:
+        - IrloTests
+        - IrloUITests
+
+  IrloTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - IrloTests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: Irlo
+
+  IrloUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - IrloUITests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: Irlo
