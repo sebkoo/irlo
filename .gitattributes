@@ -1,0 +1,14 @@
+# Normalize line endings across contributors and CI
+* text=auto eol=lf
+
+# Binary media — never diff or normalize
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.mp4 binary
+*.mov binary
+*.icns binary
+*.pdf binary
+*.p8 binary
