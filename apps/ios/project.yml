@@ -1,0 +1,31 @@
+# Single source of truth for the Xcode project — Irlo.xcodeproj is generated
+# (make bootstrap) and gitignored. See ADR-0002.
+name: Irlo
+options:
+  bundleIdPrefix: com.sebkoo
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+
+targets:
+  Irlo:
+    type: application
+    platform: iOS
+    sources:
+      - Irlo/Sources
+    info:
+      path: Irlo/Info.plist
+      properties:
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: Default
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
+    scheme:
+      gatherCoverageData: true
