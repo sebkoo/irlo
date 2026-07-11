@@ -57,6 +57,11 @@ Strict red → green → refactor. Commit triplets:
 - iOS: XCTest for ViewModels/repositories; one XCUITest journey per client story; swift-snapshot-testing for Deck cards & paywall; StoreKitTest with a local `.storekit` config.
 - Coverage gates (CI): `server/src` ≥ 90% (payments + admission state machines: 100% branch), `IrloKit` ≥ 85%. Badges appear only when real.
 - Every user story (`docs/user-stories.md`) maps to named tests **before** implementation — the PR template enforces it.
+- Reachable error-path branches belong in the initial red set — the coverage gate is the
+  backstop, not the discovery mechanism. Genuinely unreachable guards (e.g. `if (!row)
+  throw` after a returning-insert that can't yield an empty array) get a justified
+  `c8-ignore` instead, per the established pattern — don't mock to force coverage of code
+  that can't actually run.
 - After each completed TDD triplet, and always before a push, invoke the `code-reviewer`
   subagent (proactively, or via `/review`) over the diff since the last review marker.
   `BLOCKING` findings must be fixed and re-reviewed before proceeding; record the reviewed SHA

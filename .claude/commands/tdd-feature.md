@@ -25,3 +25,9 @@ Implement **$ARGUMENTS** as a TDD triplet per CLAUDE.md §TDD protocol.
 
 Rules: never write implementation before the red commit exists; never weaken a
 coverage gate; state machines (payments, admission) require 100% branch coverage.
+Repository triplets using the idempotency-catch pattern (attempt insert, catch the
+expected unique-violation, fall back to a lookup) MUST include a red test proving
+non-unique failures (FK/NOT-NULL violations, etc.) propagate rather than get
+swallowed by that catch — found missing in C23's ledger/inbox repositories only
+after `make test-ci`'s coverage gate caught it post-hoc (2026-07-11); this belongs
+in the initial red set, not discovered later.
