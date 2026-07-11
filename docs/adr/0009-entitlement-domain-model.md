@@ -53,7 +53,7 @@ amendment listed explicitly under *Refinements to prior ADRs*.
 the append, so there is no eventual-consistency window on the single write path, yet every
 row remains rebuildable from history. The full model follows.
 
-### Aggregates and identity
+### 3a. Aggregates and identity
 
 - **Member** (account) is the entitlement subject — never a device (ADR-0004 D2).
 - **SubscriptionAggregate** — keyed `(provider, provider_subscription_id, generation)`.
@@ -75,7 +75,7 @@ row remains rebuildable from history. The full model follows.
   transition executor consuming normalized `PaymentEvent`s — webhooks, client JWS
   submissions, and reconciliation corrections all flow through it (invariant I14).
 
-### Subscription state machine (per aggregate generation; 100% branch gate)
+### 3b. Subscription state machine (per aggregate generation; 100% branch gate)
 
 **States** — `trial`, `active`, `grace`, `billing_retry`, `expired`†, `refunded`†
 († terminal). Aggregate **context** (not states): `willRenew`, `currentPeriodEnd`,
@@ -160,7 +160,7 @@ and [subtype](https://developer.apple.com/documentation/appstoreservernotificati
 - Admission terminals (`member`, `rejected`, `withdrawn`) are likewise absorbing; reapply
   is a new application generation gated by `cooldownUntil`.
 
-### Admission state machine (per application generation; 100% branch gate)
+### 3c. Admission state machine (per application generation; 100% branch gate)
 
 **States** — `draft`, `submitted`, `under_review`, `waitlisted` (context: `lane ∈
 {standard, priority}`; position always derived, never stored), `accepted`, `member`†,
@@ -185,12 +185,12 @@ and [subtype](https://developer.apple.com/documentation/appstoreservernotificati
   *identical* decision is a recorded no-op; a *conflicting* decision on an already-decided
   application is a typed domain error. Never a second admission.
 
-### Idempotency — three layers, each catching what the others cannot
+### 3d. Idempotency — three layers, each catching what the others cannot
 
 | Layer | Mechanism | Catches |
 |---|---|---|
 | 1 · Inbox | `payment_events` row UNIQUE `(source, event_id)` — Apple `notificationUUID`, Stripe `event.id`, client submissions `(apple-client, transactionId)`, reconciliation `(recon, run:aggregate)` — inserted **in the same transaction** as all effects | exact redelivery of the same envelope |
-| 2 · Ledger natural keys | UNIQUE deterministic key per row: credits/grants `(provider, transaction_or_invoice_id)` · debits `(member, client_idempotency_key)` · reversals `(provider, refund_or_revocation_id)` | the same **economic fact** under a *different* envelope (Apple re-signs; client-JWS and ONE_TIME_CHARGE both deliver one purchase; a reconciliation correction pre-empting the late original event) |
+| 2 · Ledger natural keys | UNIQUE deterministic key per row: credits/grants `(provider, transaction_or_invoice_id)` · spend-debits `(member, client_idempotency_key)` · refund-debits `(provider, refund_id)` (I2 — a *debit*, distinct from spend-debits by provenance, not `entryType`) · reversals (irlo.plus only) `(provider, refund_or_revocation_id)` | the same **economic fact** under a *different* envelope (Apple re-signs; client-JWS and ONE_TIME_CHARGE both deliver one purchase; a reconciliation correction pre-empting the late original event) |
 | 3 · Monotonic state guard | per-generation `highWater` on provider effective time (Apple `signedDate`, Stripe `event.created`); total order `(effectiveAt, inbox_seq)` recorded on the log row; stale event → recorded no-op | out-of-order delivery regressing state |
 
 Event-key dedupe alone misses same-fact-different-envelope; ledger uniqueness alone misses
@@ -200,7 +200,7 @@ the money invariant, layer 3 the state protector. Every inbox row records a **di
 Stage 3 "webhook replay is a no-op" artifact. Client-initiated consumption (undo, skip)
 carries a client-minted UUID idempotency key → layer 2.
 
-### Dual-rail reconciliation — one truth, who wins
+### 3e. Dual-rail reconciliation — one truth, who wins
 
 - **Per-provider authority (I13):** provider P's events mutate only P-owned aggregates.
   Apple is authoritative for Apple aggregates, Stripe for Stripe. A "Stripe cancel vs Apple
@@ -219,14 +219,22 @@ carries a client-minted UUID idempotency key → layer 2.
 - **Consumption authority is local:** providers know purchases, not consumption. The ledger
   is authoritative for debits; reconciliation checks purchase-side completeness only.
 
-### Domain invariants (each becomes a named test)
+### 3f. Domain invariants (each becomes a named test)
 
 - **I1** Ledger and admission logs are append-only — no UPDATE/DELETE; corrections are
   compensating entries.
-- **I2** A **debit** never takes a consumable balance below zero — row lock + guard in the
-  debit transaction, DB CHECK as backstop. Provider **reversals** may drive a balance
-  negative (refunded pack already partly spent = member debt); balance < qty blocks further
-  spends until future credits repay. Balance always equals Σ(ledger rows) — no clamping.
+- **I2** A **spend-debit** (member-initiated consumption — undo, `waitlist.skip`) never
+  takes a consumable balance below zero — row lock + guard in the debit transaction; C21
+  ships no `DB CHECK(balance >= 0)`, because only the executor can tell a spend-debit
+  (must be guarded) apart from a **refund-debit** (a provider refund of an already-spent
+  pack, recorded as `debit` per Q6 — must *not* be guarded, since driving the balance
+  negative there is the whole point: refunded-but-spent = member debt). The executor
+  distinguishes them by natural-key provenance (member-minted idempotency key = spend;
+  provider transaction/refund id = refund), not by `entryType` alone — both are `debit`
+  rows. Balance < qty blocks further spends until future credits repay. Balance always
+  equals Σ(ledger rows) — no clamping. *(Corrected 2026-07-11 alongside the Q6 fix: this
+  invariant previously said "reversal," a row shape reserved for irlo.plus periods since
+  §3a, and claimed a blanket DB CHECK C21 never shipped.)*
 - **I3** Every ledger row has a unique natural key; replaying any event adds no row.
 - **I4** Every processed event is in the inbox exactly once; inbox insert + all effects
   commit atomically (exactly-once effects over at-least-once delivery).
@@ -258,8 +266,9 @@ carries a client-minted UUID idempotency key → layer 2.
    (edges discourage with 409 / manage-instead-of-buy UI).
 3. Apple REVOKE **folds into `refunded`** (identical effects; one fewer terminal state to
    hold at 100% branch).
-4. Reversal-induced negative balances are **allowed as member debt, no clamping**
-   (Σ-derivability preserved; spends blocked until repaid) — see I2.
+4. Refund-induced negative balances (a consumable refund recorded as a `debit`, per Q6 —
+   not a `reversal`, reserved for irlo.plus periods) are **allowed as member debt, no
+   clamping** (Σ-derivability preserved; spends blocked until repaid) — see I2.
 5. **I5a** stale-but-economic events: suppression applies to state transitions only, never
    to ledger appends or period context.
 
@@ -348,8 +357,13 @@ key:(member,K)}` — unique-violation ⇒ already succeeded: replay the original
 second debit → guard `balance ≥ qty` else typed `insufficient_credits` (rollback) → balance
 `-= qty` → apply the domain effect in the same txn (lane move / undo marker — I11) →
 commit. Racing spends serialize on the lock; the loser gets `insufficient_credits`. A
-refund of a partly-spent pack appends a full `reversal` — balance may go negative (member
-debt; decision 4).
+refund of a partly-spent pack appends a `debit` for the full refunded quantity — not a
+`reversal`, which is reserved for the grant/reversal (irlo.plus period) row shape; balance
+may go negative (member debt; decision 4). *(Correction, 2026-07-11: this paragraph
+originally said "reversal," contradicting §3a's own two-shapes definition — credit/debit
+are the countable consumable rows, grant/reversal are irlo.plus-only — and C23's ledger
+repository correctly implemented the credit/debit half. Caught by review while building
+C23, before the Stage 4 App Store consumable-refund path could inherit the wrong shape.)*
 
 ### Refinements to prior ADRs
 
