@@ -38,4 +38,54 @@ describe('normalizeStripeEvent (ADR-0009 §3b — Stripe event-mapping table)', 
       stripeEventType: 'customer.subscription.paused',
     });
   });
+
+  describe('invoice.paid — billing_reason branching', () => {
+    it('subscription_create with a zero-total invoice normalizes to purchased(offerPresent: true) — a trial', () => {
+      const result = normalizeStripeEvent({
+        type: 'invoice.paid',
+        data: { object: { billing_reason: 'subscription_create', total: 0 } },
+      });
+
+      expect(result).toEqual({
+        kind: 'purchase_event',
+        event: { type: 'purchased', offerPresent: true },
+      });
+    });
+
+    it('subscription_create with a nonzero-total invoice normalizes to purchased(offerPresent: false) — no trial', () => {
+      const result = normalizeStripeEvent({
+        type: 'invoice.paid',
+        data: { object: { billing_reason: 'subscription_create', total: 999 } },
+      });
+
+      expect(result).toEqual({
+        kind: 'purchase_event',
+        event: { type: 'purchased', offerPresent: false },
+      });
+    });
+
+    it('subscription_cycle normalizes to renewed', () => {
+      const result = normalizeStripeEvent({
+        type: 'invoice.paid',
+        data: { object: { billing_reason: 'subscription_cycle', total: 999 } },
+      });
+
+      expect(result).toEqual({
+        kind: 'subscription_event',
+        event: { type: 'renewed' },
+      });
+    });
+
+    it('a billing_reason outside subscription_create/subscription_cycle is reported unsupported', () => {
+      const result = normalizeStripeEvent({
+        type: 'invoice.paid',
+        data: { object: { billing_reason: 'subscription_update', total: 0 } },
+      });
+
+      expect(result).toEqual({
+        kind: 'unsupported',
+        stripeEventType: 'invoice.paid',
+      });
+    });
+  });
 });
