@@ -1,6 +1,10 @@
 import type Stripe from 'stripe';
 
-import type { PurchaseEvent, SubscriptionEvent } from '../../domain/subscription-transition.js';
+import type {
+  ContextEvent,
+  PurchaseEvent,
+  SubscriptionEvent,
+} from '../../domain/subscription-transition.js';
 
 /**
  * ADR-0009 §3b's Stripe event-mapping table, the Stripe-rail counterpart to
@@ -19,12 +23,13 @@ import type { PurchaseEvent, SubscriptionEvent } from '../../domain/subscription
  * indistinguishable from a genuinely out-of-scope event otherwise):
  * - Mapped here: invoice.payment_failed, customer.subscription.deleted,
  *   charge.refunded, invoice.paid (billing_reason branches 'purchased' vs
- *   'renewed' vs unsupported — see its own case below).
+ *   'renewed' vs unsupported), customer.subscription.updated
+ *   (previous_attributes diffing branches autorenew_set vs plan_changed vs
+ *   unsupported — see its own case below).
  * - Deferred to a follow-up triplet, needs payload branching this switch
- *   doesn't yet do: customer.subscription.updated (previous_attributes
- *   diffing distinguishes autorenew_set from plan_changed);
- *   charge.dispute.closed (only a `status: 'lost'` dispute is refund-
- *   equivalent — a 'won' dispute isn't a subscription event at all).
+ *   doesn't yet do: charge.dispute.closed (only a `status: 'lost'` dispute
+ *   is refund-equivalent — a 'won' dispute isn't a subscription event at
+ *   all).
  * - Not a subscription-state event, so intentionally never mapped here:
  *   checkout.session.completed (member↔customer linkage — the executor's
  *   job, not the reducer's).
@@ -32,8 +37,22 @@ import type { PurchaseEvent, SubscriptionEvent } from '../../domain/subscription
  */
 export type NormalizedStripeEvent =
   | { kind: 'subscription_event'; event: SubscriptionEvent }
+  | { kind: 'context_event'; event: ContextEvent }
   | { kind: 'purchase_event'; event: PurchaseEvent }
   | { kind: 'unsupported'; stripeEventType: string };
+
+/**
+ * Only the field this normalizer actually reads from a subscription item —
+ * its price id, for plan_changed's productId — not the full
+ * `Stripe.SubscriptionItem`/`Stripe.ApiList` shape.
+ */
+interface MinimalSubscriptionItems {
+  data: { price: Pick<Stripe.Price, 'id'> }[];
+}
+
+type MinimalSubscriptionDiff = Pick<Stripe.Subscription, 'cancel_at_period_end'> & {
+  items: MinimalSubscriptionItems;
+};
 
 /**
  * Each handled Stripe event type paired with only the payload fields its
@@ -49,12 +68,20 @@ type StripeNormalizerInput =
   | { type: 'charge.refunded' }
   | { type: 'invoice.paid'; data: { object: Pick<Stripe.Invoice, 'billing_reason' | 'total'> } }
   | {
+      type: 'customer.subscription.updated';
+      data: {
+        object: MinimalSubscriptionDiff;
+        previous_attributes?: Partial<MinimalSubscriptionDiff>;
+      };
+    }
+  | {
       type: Exclude<
         Stripe.Event['type'],
         | 'invoice.payment_failed'
         | 'customer.subscription.deleted'
         | 'charge.refunded'
         | 'invoice.paid'
+        | 'customer.subscription.updated'
       >;
     };
 
@@ -117,6 +144,43 @@ export function normalizeStripeEvent(event: StripeNormalizerInput): NormalizedSt
       // Other billing_reason values (subscription_update,
       // subscription_threshold, manual, ...) aren't in ADR-0009 §3b's
       // table — genuinely unsupported for now, not silently mis-mapped.
+      return { kind: 'unsupported', stripeEventType: event.type };
+    }
+
+    case 'customer.subscription.updated': {
+      const previous = event.data.previous_attributes;
+
+      // items checked first: if a single update touched both fields (rare
+      // — most dashboard/API actions send one focused change), plan_changed
+      // wins. Not an ADR-0009 rule, a named precedence for an edge the ADR
+      // doesn't address; locked by its own test. Revisit if this proves
+      // wrong in practice (e.g. an autorenew_set signal getting dropped
+      // during a combined update turns out to matter).
+      if (previous?.items !== undefined) {
+        const productId = event.data.object.items.data[0]?.price.id;
+
+        // Defensive, not expected in practice: Stripe wouldn't fire an
+        // items-changed diff against an item-less subscription. Reporting
+        // unsupported (not a plan_changed with a fabricated productId) is
+        // the honest outcome when there's nothing to resolve it to.
+        if (productId === undefined) {
+          return { kind: 'unsupported', stripeEventType: event.type };
+        }
+
+        return { kind: 'context_event', event: { type: 'plan_changed', productId } };
+      }
+
+      if (previous?.cancel_at_period_end !== undefined) {
+        return {
+          kind: 'context_event',
+          event: {
+            type: 'autorenew_set',
+            willRenew: !event.data.object.cancel_at_period_end,
+          },
+        };
+      }
+
+      // Some other field changed (e.g. metadata) — not one §3b maps.
       return { kind: 'unsupported', stripeEventType: event.type };
     }
 
