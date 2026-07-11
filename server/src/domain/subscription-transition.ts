@@ -93,8 +93,46 @@ export function transition(
  * aggregate, so transition()'s signature stays untouched.
  */
 export interface SubscriptionAggregateWithContext extends SubscriptionAggregate {
+  productId: string;
   currentPeriodEnd: Date | null;
   highWater: Date | null;
+}
+
+/**
+ * ADR-0009 §3b's context-only events — DID_CHANGE_RENEWAL_STATUS,
+ * DID_CHANGE_RENEWAL_PREF, RENEWAL_EXTENDED and their Stripe counterparts.
+ * None of these appear in `SubscriptionEvent`: they never move `state`, so
+ * they bypass `transition()` (and I6's terminal-absorption check, which is
+ * specifically about state) entirely — see `applyContextEvent` below.
+ * `offer` is deliberately not tracked here, matching the subscriptions
+ * schema's own deferral (`server/src/db/schema/subscriptions.ts`): the raw
+ * detail lives in `payment_events.payload`, the log is the truth.
+ */
+export type ContextEvent =
+  | { type: 'autorenew_set'; willRenew: boolean }
+  | { type: 'plan_changed'; productId: string }
+  | { type: 'renewal_extended' };
+
+function isContextEvent(event: SubscriptionEvent | ContextEvent): event is ContextEvent {
+  return (
+    event.type === 'autorenew_set' ||
+    event.type === 'plan_changed' ||
+    event.type === 'renewal_extended'
+  );
+}
+
+function applyContextEvent(
+  aggregate: SubscriptionAggregateWithContext,
+  event: ContextEvent,
+): SubscriptionAggregateWithContext {
+  switch (event.type) {
+    case 'autorenew_set':
+      return { ...aggregate, willRenew: event.willRenew };
+    case 'plan_changed':
+      return { ...aggregate, productId: event.productId };
+    case 'renewal_extended':
+      return aggregate;
+  }
 }
 
 /**
@@ -106,7 +144,7 @@ export interface SubscriptionAggregateWithContext extends SubscriptionAggregate 
  * executor's job, not modeled here.
  */
 export interface TimedSubscriptionEvent {
-  event: SubscriptionEvent;
+  event: SubscriptionEvent | ContextEvent;
   effectiveAt: Date;
   /** Present only for events that carry a new period end (e.g. renewed). */
   periodEnd?: Date;
@@ -114,8 +152,11 @@ export interface TimedSubscriptionEvent {
 
 /**
  * 'applied' | 'superseded' | 'no_op_terminal' map directly onto
- * `payment_events.disposition` (C21's schema enum). 'invalid' does NOT — the
- * schema enum has no slot for an off-graph event, deliberately: a domain
+ * `payment_events.disposition` (C21's schema enum). 'applied' means the
+ * event's effects were committed — a state change, a context update
+ * (autorenew_set, plan_changed, renewal_extended), or both; it does not by
+ * itself imply `stateChanged`. 'invalid' does NOT map to the schema enum —
+ * the schema enum has no slot for an off-graph event, deliberately: a domain
  * error isn't an idempotency outcome. The executor must not write an
  * 'invalid' result as a disposition value; route it to alerting/operator
  * review instead (mechanism TBD at executor-wiring time — this is the
@@ -160,6 +201,18 @@ export function applyEvent(
     };
   }
 
+  if (isContextEvent(event)) {
+    return {
+      aggregate: {
+        ...applyContextEvent(aggregate, event),
+        currentPeriodEnd: mergePeriodEnd(aggregate.currentPeriodEnd, periodEnd),
+        highWater: effectiveAt,
+      },
+      stateChanged: false,
+      disposition: 'applied',
+    };
+  }
+
   const result = transition(aggregate, event);
 
   if (!result.ok) {
@@ -176,6 +229,7 @@ export function applyEvent(
 
   return {
     aggregate: {
+      ...aggregate,
       ...result.aggregate,
       currentPeriodEnd: mergePeriodEnd(aggregate.currentPeriodEnd, periodEnd),
       highWater: effectiveAt,

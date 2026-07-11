@@ -16,6 +16,7 @@ describe('I5a — stale-but-economic events (ADR-0009 §3f)', () => {
     const aggregate: SubscriptionAggregateWithContext = {
       state: 'grace',
       willRenew: true,
+      productId: 'irlo.plus.monthly',
       currentPeriodEnd: T1,
       highWater: T3,
     };
@@ -44,6 +45,7 @@ describe('I5a — stale-but-economic events (ADR-0009 §3f)', () => {
     const aggregate: SubscriptionAggregateWithContext = {
       state: 'active',
       willRenew: true,
+      productId: 'irlo.plus.monthly',
       currentPeriodEnd: T3,
       highWater: T3,
     };
@@ -62,6 +64,7 @@ describe('I5a — stale-but-economic events (ADR-0009 §3f)', () => {
     const aggregate: SubscriptionAggregateWithContext = {
       state: 'grace',
       willRenew: true,
+      productId: 'irlo.plus.monthly',
       currentPeriodEnd: T1,
       highWater: T1,
     };
@@ -83,6 +86,7 @@ describe('I5a — stale-but-economic events (ADR-0009 §3f)', () => {
     const aggregate: SubscriptionAggregateWithContext = {
       state: 'active',
       willRenew: true,
+      productId: 'irlo.plus.monthly',
       currentPeriodEnd: T1,
       highWater: T1,
     };
@@ -104,6 +108,7 @@ describe('I5a — stale-but-economic events (ADR-0009 §3f)', () => {
     const aggregate: SubscriptionAggregateWithContext = {
       state: 'trial',
       willRenew: true,
+      productId: 'irlo.plus.monthly',
       currentPeriodEnd: null,
       highWater: null,
     };
@@ -123,6 +128,7 @@ describe('I5a — stale-but-economic events (ADR-0009 §3f)', () => {
     const aggregate: SubscriptionAggregateWithContext = {
       state: 'expired',
       willRenew: true,
+      productId: 'irlo.plus.monthly',
       currentPeriodEnd: T1,
       highWater: T1,
     };
@@ -139,6 +145,7 @@ describe('I5a — stale-but-economic events (ADR-0009 §3f)', () => {
     const aggregate: SubscriptionAggregateWithContext = {
       state: 'trial',
       willRenew: true,
+      productId: 'irlo.plus.monthly',
       currentPeriodEnd: T1,
       highWater: T1,
     };
