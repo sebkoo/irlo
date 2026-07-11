@@ -90,4 +90,21 @@ describe('inbox repository (C23 — idempotency layer 1)', () => {
     expect(fromApple.inserted).toBe(true);
     expect(fromApple.row.id).not.toBe(fromStripe.row.id);
   });
+
+  it('propagates a genuine insert failure that is not a unique violation', async () => {
+    const repo = createInboxRepository(testDb.db);
+
+    // payload is NOT NULL (23502) — a distinct failure from the
+    // (source, event_id) unique violation (23505) tryInsert() catches;
+    // that catch must not swallow this one.
+    await expect(
+      repo.tryInsert({
+        source: 'stripe-webhook',
+        eventId: `evt_${randomUUID()}`,
+        payload: null,
+        effectiveAt: new Date(),
+        disposition: 'applied',
+      }),
+    ).rejects.toMatchObject({ cause: { code: '23502' } });
+  });
 });
