@@ -45,6 +45,13 @@ C18 (OTel) is unaffected and may land either side.
   fixture events · idempotent processing (dedupe table) · subscription state
   machine wiring · test clocks for renewal/dunning · refund/cancel downgrade
   paths · evidence: asciinema cast of webhook replay being a no-op.
+- **Escalation note (decided 2026-07-11):** the named judgment escalations for the
+  subscription and admission state machines are satisfied by
+  [ADR-0009](docs/adr/0009-entitlement-domain-model.md) — implementing what the ADR
+  specifies needs no new design pause. A fresh escalation triggers only if
+  implementation surfaces a genuine domain-design gap (already a stop-and-show-evidence
+  event under CLAUDE.md's deviation rule), or when a genuinely new domain arrives
+  (Deck feed ranking, Stage 6; messaging fan-out, Stage 7).
 
 ## Stage 4 — App Store rail (≈C43–C49) — US-07, US-08 (server half)
 
