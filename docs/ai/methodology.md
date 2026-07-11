@@ -114,15 +114,39 @@ two tiers are complementary, not redundant — skipping the milestone sweep
 because the triplets were "already reviewed" is exactly the gap that let
 this through.
 
-**Operational note (2026-07-11): three cases of the harness enforcing its own rules.**
+**Operational note (2026-07-11): four cases of the harness enforcing its own rules.**
 (1) The reviewer self-report check caught a stale `code-reviewer` definition before a
 result was trusted (agent-reload note above); (2) the milestone-boundary sweep caught
 cross-commit doc drift that three per-triplet reviews had each missed (previous note);
 (3) the model-routing table's named judgment escalation paused Stage 2 until the
 entitlement domain model got a fresh session on the pinned model/effort (Fable 5 · xhigh,
-Plan Mode → ADR-0009). Common thread: rules encoded in harness files — CLAUDE.md, agent
-frontmatter, the routing table — get enforced by the loop itself; rules that live only in
-chat don't survive long enough to be enforced.
+Plan Mode → ADR-0009); (4) the C19 per-triplet review returned `Safe to push: no` on a
+casual `NEXT_STEPS.md` "(done)" claim that overstated a Docker-daemon-gated runtime
+verification as complete — the gate demanded scoped wording and a tracked follow-up
+before approving, and a second SHOULD-FIX on per-commit red→green integrity was cleared
+only by `git show` evidence, not narrative. Common thread: rules encoded in harness
+files — CLAUDE.md, agent frontmatter, the routing table, the review gate itself — get
+enforced by the loop; rules that live only in chat or in an unverified claim don't
+survive long enough to be enforced.
+
+## The five-layer AI stack — where Irlo stands
+
+The five layers commonly used to reason about AI-native engineering — retrieval,
+efficiency, action, agent, trust — exist on **two planes** in this repo: the
+**development harness** (how Irlo itself gets built, implemented today) and the
+**product** (what Irlo's users get, deliberately staged). Conflating the two would
+overclaim; separating them is the honest picture.
+
+| Layer | Harness plane (today) | Product plane (today) |
+|---|---|---|
+| Retrieval (embeddings · vector DB · RAG) | n/a | Deliberately deferred — pgvector Deck re-ranking + LLM-assisted moderation live in `NEXT_STEPS.md` as a later ADR; this is the retrieval layer's planned entry point |
+| Efficiency (context · caching · model routing · gateways) | Implemented: CLAUDE.md context packs, the model-routing table, subagent frontmatter pinning (cheap execution / expensive review) | No LLM calls in the product yet, so no gateway/cache by definition |
+| Action (function calling · tool use · MCP · integrations) | Implemented: commands, hooks, subagents | Planned, not yet built: Stripe (Stage 3, C35–C42) and App Store Server Notifications (Stage 4, C43–C49) per [ADR-0004](../adr/0004-payments-platform.md); LLM tool-calling arrives with the retrieval milestone |
+| Agent (harness · loops · memory) | Strongest layer: the plan→red→green→review loop, four recorded self-enforcement cases, memory + review markers | n/a by design |
+| Trust (guardrails · observability · evals) | Truthfulness rules, gates, `docs/ai/evals.md` | pino landed (C17), OTel queued (C18); inbox dispositions (`applied`/`duplicate`/`superseded`/`no_op_terminal`) are a specified observability model ([ADR-0009](../adr/0009-entitlement-domain-model.md)), not yet built — lands with the Stripe rail (Stage 3) |
+
+Gaps in the product plane are prioritization decisions recorded here, not blind
+spots — the JD this project targets is payments/backend first.
 
 ## Velocity notes
 

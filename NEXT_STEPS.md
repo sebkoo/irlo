@@ -87,7 +87,8 @@ C18 (OTel) is unaffected and may land either side.
 
 - Stripe Checkout web page (US-09 web half) · React Native brownfield Events
   screen (TurboModule) · pgvector embeddings ranking + LLM moderation behind a
-  provider-agnostic interface (study-map rows 10–14).
+  provider-agnostic interface — the retrieval-layer entry point (layers 1–3,
+  `docs/ai/methodology.md` §The five-layer AI stack; study-map rows 10–14).
 
 ## Deferred / parked items
 
