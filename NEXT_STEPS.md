@@ -206,9 +206,11 @@ pgvector Deck re-ranking MVP mapped to the five-layer AI stack
   so `customer.subscription.updated` can emit both context events, or have the
   consumer re-derive `willRenew` from the current `object.cancel_at_period_end` on
   every subscription.updated regardless of which field triggered the diff (simpler,
-  makes the diff redundant for autorenew_set specifically). Found in code-reviewer's
-  Stripe-normalizer review (2026-07-11) — not a bug in the normalizer, which
-  correctly implements the one-event-in/one-event-out shape as scoped; a genuine gap
+  makes the diff redundant for autorenew_set specifically). Precedence identified and
+  locked by its own test while implementing; flagged as requiring plan-of-record
+  tracking in the code-reviewer's Stripe-normalizer review (2026-07-11) — not a bug
+  in the normalizer, which correctly implements the one-event-in/one-event-out
+  shape as scoped; a genuine gap
   in that shape for this specific combined-update edge.
 - README CI/coverage badges — add only after the first green CI run (may already
   be done post-push; check).
