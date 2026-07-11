@@ -1,12 +1,11 @@
-import { healthStatusSchema } from '@irlo/contracts';
 import Fastify, { type FastifyInstance } from 'fastify';
 
-import { healthStatus } from './health.js';
+import { registerHealthRoute } from './routes/health.js';
 
 export function buildApp(): FastifyInstance {
   const app = Fastify({ logger: false });
 
-  app.get('/health', () => healthStatusSchema.parse(healthStatus(new Date())));
+  registerHealthRoute(app);
 
   return app;
 }
