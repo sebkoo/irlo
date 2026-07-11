@@ -41,37 +41,48 @@ members" scope (set before ADR-0009 existed); Stage 2's C23–C25 is re-scoped b
 from schema work to service logic over these already-existing tables, so the two
 stages don't describe the same work twice.
 
-## Stage 2 — Entitlements & admission (≈C23–C34) — US-01, US-02
+## Stage 2 — Entitlements & admission (≈C23–C36) — US-01, US-02
 
 - C23 entitlement service logic — ledger repository (done: append/getBalance,
   idempotency layer 2 on `natural_key`) + inbox repository (done: tryInsert,
   idempotency layer 1 on `(source, event_id)`) — over the ADR-0009 tables C21
   already created (schema/tables moved to Stage 1 as ADR-0009's persistence
   substrate; this triplet is service logic, not schema, per the 2026-07-11 C21
-  scope note above). **Remaining: the transition executor itself** — see the
-  next-session opener below.
-- C24–C25 subscription state-machine reducer wiring (executor calls into the
-  C23 repositories; idempotency layer 3 — the monotonic `highWater` guard —
-  lands here, since it's state-transition logic, not repository logic)
-- C26–C27 capability check `can(member, capability)` + gating middleware
-- C28–C31 admission state machine (pure core, 100% branch) + persistence
-- C32–C33 waitlist lanes + `waitlist.skip` consumption (idempotent)
-- C34 admission audit log + evidence (sequence diagram, hurl transcripts)
+  scope note above).
+- C24–C27 subscription state-machine reducer (done — `server/src/domain/subscription-transition.ts`):
+  C24 pure state graph (`transition`), C25 idempotency layer 3 (`applyEvent`'s
+  monotonic `highWater` guard, I5a stale-but-economic events), C26 context-only
+  events (`autorenew_set`, `plan_changed`, `renewal_extended`), C27
+  generation-spawning (`applyPurchase` — `[*] --> trial|active` entry
+  transitions, RESUBSCRIBE-on-terminal spawning generation+1 per I6). This is
+  the pure reducer only — no executor/persistence wiring yet; that lands as
+  part of Stage 3's "subscription state machine wiring" (below), the
+  reducer's first real caller, rather than as a standalone Stage 2 step.
+- C28–C29 capability check `can(member, capability)` + gating middleware
+  *(renumbered from C26–C27 — the reducer completion above claimed those
+  numbers first; C-numbers are planning handles per this doc's own header,
+  not promises of exact count, so this is a relabel, not a scope change)*
+- C30–C33 admission state machine (pure core, 100% branch) + persistence
+- C34–C35 waitlist lanes + `waitlist.skip` consumption (idempotent)
+- C36 admission audit log + evidence (sequence diagram, hurl transcripts)
 
-**Next-session opener (2026-07-11 close):** subscription state-machine reducer
-triplets — implement ADR-0009 §3b's tables verbatim (states, events, guards,
-terminal absorption), including a named test for I5a's stale-but-economic case
-(a stale event that must still append its ledger grant/credit while suppressing
-only the state transition — see ADR-0009 §3f). The Stage 3 escalation note's
-named judgment escalation is already satisfied by ADR-0009 (no design pause
-needed — implementing what the ADR specifies, per the 2026-07-11 decision
-above). Model routing: Sonnet 5 @ high, fresh session. Build on C23's ledger/
-inbox repositories (`server/src/db/repositories/{ledger,inbox}.ts`) and the
-shared `isUniqueViolation` helper (`server/src/db/pg-errors.ts`) — don't
-re-derive idempotency layers 1–2 the executor already has repositories for;
-layer 3 (monotonic state guard) is the new piece this stage adds.
+**Reducer completion (2026-07-11 close, done):** subscription state-machine
+reducer triplets landed — ADR-0009 §3b's tables implemented verbatim (states,
+events, guards, terminal absorption), including I5a's stale-but-economic named
+test (a stale event that still appends its ledger grant/credit while
+suppressing only the state transition — see ADR-0009 §3f), plus context-only
+events (C26) and generation-spawning (C27). The Stage 3 escalation note's
+named judgment escalation was satisfied by ADR-0009 (no design pause needed —
+implementing what the ADR specifies, per the 2026-07-11 decision above). Built
+on C23's ledger/inbox repositories (`server/src/db/repositories/{ledger,inbox}.ts`)
+and the shared `isUniqueViolation` helper (`server/src/db/pg-errors.ts`) —
+idempotency layers 1–2 (inbox, ledger natural keys) already had repositories
+from C23; layer 3 (monotonic state guard, `applyEvent`) was the new piece C25
+added. **Remaining for Stage 2/3 boundary:** the executor — wiring
+`applyEvent`/`applyPurchase` into these repositories and persistence — lands
+as part of Stage 3's webhook consumer below, its first real caller.
 
-## Stage 3 — Stripe rail (≈C35–C42) — US-09 (server half), US-10
+## Stage 3 — Stripe rail (≈C37–C44) — US-09 (server half), US-10
 
 - Checkout session endpoint (contract-first) · signed webhook consumer with
   fixture events · idempotent processing (dedupe table) · subscription state
@@ -131,8 +142,9 @@ layer 3 (monotonic state guard) is the new piece this stage adds.
 
 **Sequencing — split gate.** The **ADR-0010 design session** (Plan Mode, escalated model) is
 **ungated**: it needs no Deck feed to exist and may be pulled forward, including for interview
-value. **Implementation** (code) is gated on Stage 2's transition executor (C23–C25), Stage 3's
-Stripe rail (the first webhook rail), **and Stage 6's Deck feed** — there is nothing to re-rank
+value. **Implementation** (code) is gated on the transition executor (Stage 2's reducer, C23–C27,
+wired up as Stage 3's webhook consumer), Stage 3's Stripe rail (the first webhook rail),
+**and Stage 6's Deck feed** — there is nothing to re-rank
 before the feed exists. Not given C-numbers yet; positioned here (after Stage 9) as an
 orthogonal track: its *design* isn't Stage-N-sequenced, but its *code* now explicitly is.
 
