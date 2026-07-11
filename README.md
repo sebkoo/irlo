@@ -18,6 +18,10 @@ in-person activities — run crews, gallery nights, pickup games.*
 [![Platform](https://img.shields.io/badge/iOS-17%2B-black?logo=apple)](apps/ios/project.yml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
+*The codecov % above is canary-surface coverage, not proof of a tested system:
+Stage 0's `server/src` is one pure `health.ts` function ([ADR-0003](docs/adr/0003-backend-platform.md)).
+It starts measuring real endpoint coverage in Stage 1 — see [`NEXT_STEPS.md`](NEXT_STEPS.md).*
+
 </div>
 
 ---
