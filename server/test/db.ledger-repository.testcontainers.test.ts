@@ -134,4 +134,55 @@ describe('ledger repository (C23)', () => {
 
     expect(await repo.getBalance(memberId, 'undo')).toBe(0);
   });
+
+  it('excludes grant/reversal rows from a countable balance even when they carry a quantity — irlo.plus periods are not spark/undo/waitlist_skip credits', async () => {
+    const repo = createLedgerRepository(testDb.db);
+    const memberId = (await createMembersRepository(testDb.db).create()).id;
+
+    await repo.append({
+      memberId,
+      entryType: 'credit',
+      creditType: 'spark',
+      quantity: 5,
+      naturalKey: `apple:${randomUUID()}`,
+    });
+    // A quantity here would be unusual for a real grant/reversal row (they're
+    // period-based, ADR-0009 §3a), but the guard must hold even if one shows
+    // up with a non-null quantity — a mutation to "else quantity" must fail
+    // this test.
+    await repo.append({
+      memberId,
+      entryType: 'grant',
+      creditType: 'irlo_plus',
+      quantity: 999,
+      naturalKey: `stripe:invoice:${randomUUID()}`,
+    });
+    await repo.append({
+      memberId,
+      entryType: 'reversal',
+      creditType: 'irlo_plus',
+      quantity: 999,
+      naturalKey: `stripe:refund:${randomUUID()}`,
+    });
+
+    expect(await repo.getBalance(memberId, 'spark')).toBe(5);
+    expect(await repo.getBalance(memberId, 'irlo_plus')).toBe(0);
+  });
+
+  it('propagates a genuine insert failure that is not a unique violation', async () => {
+    const repo = createLedgerRepository(testDb.db);
+
+    // A nonexistent memberId trips the members FK (23503), not the
+    // natural_key unique constraint (23505) — append()'s unique-violation
+    // catch must not swallow this.
+    await expect(
+      repo.append({
+        memberId: randomUUID(),
+        entryType: 'credit',
+        creditType: 'spark',
+        quantity: 5,
+        naturalKey: `apple:${randomUUID()}`,
+      }),
+    ).rejects.toMatchObject({ cause: { code: '23503' } });
+  });
 });
