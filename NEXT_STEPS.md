@@ -88,6 +88,16 @@ as part of Stage 3's webhook consumer below, its first real caller.
   fixture events · idempotent processing (dedupe table) · subscription state
   machine wiring · test clocks for renewal/dunning · refund/cancel downgrade
   paths · evidence: asciinema cast of webhook replay being a no-op.
+- **Normalizer pure core landed (2026-07-11):**
+  `server/src/payments/stripe/normalize-event.ts` — `invoice.payment_failed`,
+  `customer.subscription.deleted`, `charge.refunded`, `invoice.paid`
+  (billing_reason branching), `customer.subscription.updated`
+  (`previous_attributes` diffing). Deferred, tracked in the module's own doc
+  comment: `charge.dispute.closed`, `checkout.session.completed` linkage.
+  **Remaining before the consumer is complete:** the known limitation below,
+  then signature verification + fixture events + wiring into the C23
+  repositories and the reducer (`applyEvent`/`applyPurchase`) — next-session
+  opener, see below.
 - **Escalation note (decided 2026-07-11):** the named judgment escalations — the
   entitlement domain model (Stage 2) and the subscription state machine (Stage 3), per
   CLAUDE.md §Model routing — are satisfied by
@@ -182,6 +192,24 @@ pgvector Deck re-ranking MVP mapped to the five-layer AI stack
   `period_expired` (trial→expired, forgoing dunning) by design, or is §3b missing an
   edge? Found in code-reviewer's C24 review (2026-07-11) — not a bug in C24, which
   correctly implements the ADR as specified.
+- `TODO(decide)`: `normalizeStripeEvent`'s `customer.subscription.updated` case
+  (`server/src/payments/stripe/normalize-event.ts`) checks `previous_attributes.items`
+  before `previous_attributes.cancel_at_period_end`, so a single Stripe update that
+  changes both fields in the same event normalizes to `plan_changed` only — the
+  `autorenew_set` signal is silently dropped, not queued or merged. Real entitlement
+  consequence: if that drop leaves the reducer's in-memory `willRenew` stale (says
+  renewing when the member actually set cancel-at-period-end), `active +
+  period_expired + !willRenew → expired` (the voluntary-cancel path) won't fire on
+  schedule. Rare (needs one Stripe API call touching both fields at once — most
+  dashboard/API actions send a single focused change) but real. Resolve at
+  consumer-wiring time (Stage 3, next session): either widen `NormalizedStripeEvent`
+  so `customer.subscription.updated` can emit both context events, or have the
+  consumer re-derive `willRenew` from the current `object.cancel_at_period_end` on
+  every subscription.updated regardless of which field triggered the diff (simpler,
+  makes the diff redundant for autorenew_set specifically). Found in code-reviewer's
+  Stripe-normalizer review (2026-07-11) — not a bug in the normalizer, which
+  correctly implements the one-event-in/one-event-out shape as scoped; a genuine gap
+  in that shape for this specific combined-update edge.
 - README CI/coverage badges — add only after the first green CI run (may already
   be done post-push; check).
 - Manual KIPRIS trademark session before any commercial use (`docs/naming/verification.md` #12).
