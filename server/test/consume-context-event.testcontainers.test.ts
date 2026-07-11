@@ -183,4 +183,40 @@ describe('consumeStripeContextEvent (ADR-0009 I4 — transactional inbox, contex
       .where(and(eq(paymentEvents.source, 'stripe'), eq(paymentEvents.eventId, eventId)));
     expect(inboxRows).toHaveLength(0);
   });
+
+  it('propagates a genuine insert failure that is not a unique violation, and writes nothing', async () => {
+    const providerSubscriptionId = `sub_${randomUUID()}`;
+    await seedGeneration(providerSubscriptionId);
+    const eventId = randomUUID();
+
+    // payload is NOT NULL (23502), not the (source, event_id) unique
+    // constraint (23505) — the outer catch's isUniqueViolation check must
+    // not swallow this.
+    await expect(
+      consumeStripeContextEvent(testDb.db, {
+        source: 'stripe',
+        eventId,
+        eventType: 'customer.subscription.updated',
+        payload: null,
+        effectiveAt: T2,
+        provider: 'stripe',
+        providerSubscriptionId,
+        event: { type: 'autorenew_set', willRenew: false },
+      }),
+    ).rejects.toMatchObject({ cause: { code: '23502' } });
+
+    // The transaction rolled back — no inbox row, and the subscription's
+    // willRenew is untouched by the failed write.
+    const inboxRows = await testDb.db
+      .select()
+      .from(paymentEvents)
+      .where(and(eq(paymentEvents.source, 'stripe'), eq(paymentEvents.eventId, eventId)));
+    expect(inboxRows).toHaveLength(0);
+
+    const [row] = await testDb.db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.providerSubscriptionId, providerSubscriptionId));
+    expect(row?.willRenew).toBe(true);
+  });
 });
