@@ -18,19 +18,24 @@ describe('loadConfig (canary)', () => {
   });
 });
 
-describe('.env.example Runtime section (contract sync)', () => {
-  it('pins exactly the keys serverEnvSchema declares', () => {
-    const examplePath = fileURLToPath(new URL('../../.env.example', import.meta.url));
-    const vars = parseDotenvSection(examplePath, '# --- Runtime ---');
+describe('.env.example contract sync', () => {
+  const examplePath = fileURLToPath(new URL('../../.env.example', import.meta.url));
+  const runtime = () => parseDotenvSection(examplePath, '# --- Runtime ---');
+  const datastores = () =>
+    parseDotenvSection(examplePath, '# --- Datastores (docker-compose dev env, C19) ---');
 
-    expect(Object.keys(vars).sort()).toEqual(Object.keys(serverEnvSchema.shape).sort());
+  it('schema declares exactly the Runtime keys plus DATABASE_URL (C20)', () => {
+    // REDIS_URL stays schema-less until its first consumer lands (queues/presence).
+    const expected = [...Object.keys(runtime()), 'DATABASE_URL'].sort();
+
+    expect(Object.keys(serverEnvSchema.shape).sort()).toEqual(expected);
   });
 
-  it('parses against serverEnvSchema', () => {
-    const examplePath = fileURLToPath(new URL('../../.env.example', import.meta.url));
-    const vars = parseDotenvSection(examplePath, '# --- Runtime ---');
-
-    const result = serverEnvSchema.safeParse(vars);
+  it('Runtime plus Datastores DATABASE_URL parses against serverEnvSchema', () => {
+    const result = serverEnvSchema.safeParse({
+      ...runtime(),
+      DATABASE_URL: datastores()['DATABASE_URL'],
+    });
 
     expect(result.success).toBe(true);
   });

@@ -31,3 +31,39 @@ describe('serverEnvSchema (canary)', () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe('serverEnvSchema DATABASE_URL (C20)', () => {
+  it('accepts a postgres:// connection URL', () => {
+    const parsed = serverEnvSchema.parse({
+      DATABASE_URL: 'postgres://irlo:irlo@localhost:5432/irlo_dev',
+    });
+
+    expect(parsed.DATABASE_URL).toBe('postgres://irlo:irlo@localhost:5432/irlo_dev');
+  });
+
+  it('accepts the postgresql:// protocol alias', () => {
+    const result = serverEnvSchema.safeParse({
+      DATABASE_URL: 'postgresql://irlo:irlo@localhost:5432/irlo_dev',
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('stays optional until the pool is boot-wired (Stage 2 flips it to required)', () => {
+    const parsed = serverEnvSchema.parse({});
+
+    expect(parsed.DATABASE_URL).toBeUndefined();
+  });
+
+  it('rejects a non-postgres protocol', () => {
+    const result = serverEnvSchema.safeParse({ DATABASE_URL: 'http://localhost:5432/irlo_dev' });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a malformed URL', () => {
+    const result = serverEnvSchema.safeParse({ DATABASE_URL: 'not-a-url' });
+
+    expect(result.success).toBe(false);
+  });
+});
