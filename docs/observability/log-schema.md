@@ -3,9 +3,10 @@
 The server logs structured JSON lines via Fastify's built-in pino integration
 (`fastify` bundles `pino` — no separate dependency), configured from
 `serverEnvSchema.LOG_LEVEL` (`@irlo/contracts`, see `server/src/config.ts`).
-`server/src/app.ts`'s `buildApp()` wires the level and accepts an optional
-`loggerStream` override so tests can capture lines instead of writing to
-stdout (`server/test/support/memory-log-stream.ts`).
+`server/src/app.ts`'s `buildApp()` wires the level and requires an explicit
+`loggerStream` destination — tests pass an in-memory stream to capture lines
+instead of writing to stdout (`server/test/support/memory-log-stream.ts`); a
+future server-bootstrap entrypoint passes `process.stdout`.
 
 ## Base fields (every line)
 

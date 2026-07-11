@@ -6,16 +6,16 @@ import { registerHealthRoute } from './routes/health.js';
 
 export interface BuildAppOptions {
   config?: ServerEnv;
-  loggerStream?: NodeJS.WritableStream;
+  loggerStream: NodeJS.WritableStream;
 }
 
-export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
+export function buildApp(options: BuildAppOptions): FastifyInstance {
   const config = options.config ?? loadConfig();
 
   const app = Fastify({
     logger: {
       level: config.LOG_LEVEL,
-      ...(options.loggerStream ? { stream: options.loggerStream } : {}),
+      stream: options.loggerStream,
     },
   });
 
