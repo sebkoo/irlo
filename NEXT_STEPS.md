@@ -109,6 +109,17 @@ as part of Stage 3's webhook consumer below, its first real caller.
   Stage 6's own `ranking v0 (recency/distance)` heuristic is ordinary sort logic, not a
   new domain, and needs no escalation — see Stage 6's note.
 
+**Next-session opener (2026-07-11 close):** the webhook consumer proper — signature
+verification (`Stripe.webhooks.constructEvent`) against fixture events, transactional-
+inbox wiring into the C23 repositories (`server/src/db/repositories/{ledger,inbox}.ts`),
+and dispatch into the reducer (`applyEvent`/`applyPurchase`,
+`server/src/domain/subscription-transition.ts`) via the normalizer landed this session
+(`server/src/payments/stripe/normalize-event.ts`). Before writing the executor, resolve
+the `TODO(decide)` above (combined-update dropped `autorenew_set`) — it's the kind of
+thing that's cheaper to settle before the wiring commits to a shape than to retrofit
+after. Model routing: Sonnet 5 @ high (no fresh escalation — the Stage 3 escalation
+note above already covers this).
+
 ## Stage 4 — App Store rail (≈C43–C49) — US-07, US-08 (server half)
 
 - JWS verification (App Store Server API v2) with fixture keys · Server
