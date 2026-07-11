@@ -4,19 +4,20 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 
+import { parseDotenvSection } from './support/dotenv.js';
+
 const composePath = fileURLToPath(new URL('../../docker-compose.yml', import.meta.url));
 const envExamplePath = fileURLToPath(new URL('../../.env.example', import.meta.url));
+const DATASTORES_HEADER = '# --- Datastores (docker-compose dev env, C19) ---';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function envExampleUrl(key: string): URL {
-  const line = readFileSync(envExamplePath, 'utf-8')
-    .split('\n')
-    .find((l) => l.startsWith(`${key}=`));
-  if (!line) throw new Error(`${key} missing from .env.example`);
-  return new URL(line.slice(key.length + 1));
+  const value = parseDotenvSection(envExamplePath, DATASTORES_HEADER)[key];
+  if (!value) throw new Error(`${key} missing from .env.example Datastores section`);
+  return new URL(value);
 }
 
 function composeService(name: string): Record<string, unknown> {
