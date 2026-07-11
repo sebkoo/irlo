@@ -14,6 +14,7 @@ superseded-by link. This index is the architecture tour — read top to bottom.
 | [0006](0006-realtime-messaging.md) | Realtime messaging: WebSocket gateway, presence, scale path | accepted |
 | [0007](0007-sdlc-and-operational-excellence.md) | SDLC & ops: trunk-based, CI/CD, Docker dev, Fly.io staging, SLOs, k6 | accepted |
 | [0008](0008-ios-demo-client.md) | iOS demo client: UIKit shell + SwiftUI, RxSwift⇄Combine, CoreData, StoreKit 2 | accepted |
+| [0009](0009-entitlement-domain-model.md) | Entitlement domain model: state machines, unified ledger, idempotency, reconciliation | accepted |
 
 Planned future ADRs are queued in [`NEXT_STEPS.md`](../../NEXT_STEPS.md)
 (geo indexing, feature-flag service, RevenueCat build-vs-buy, server-side AI

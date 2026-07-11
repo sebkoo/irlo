@@ -125,6 +125,8 @@ flows are first-class user paths, not afterthoughts.
 
 ## Links
 
+- Refined by [ADR-0009](0009-entitlement-domain-model.md) — precise state machines, ledger
+  shapes, idempotency layers, reconciliation semantics
 - [ADR-0003](0003-backend-platform.md) — queue/DB substrate
 - [ADR-0005](0005-member-experience-core.md) — capability gating consuming entitlements
 - `docs/monetization.md` — catalog and pricing rationale

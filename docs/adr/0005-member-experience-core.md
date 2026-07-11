@@ -96,6 +96,8 @@ the actor abstraction adds ceremony without covering persistence/audit anyway.
 
 ## Links
 
+- Refined by [ADR-0009](0009-entitlement-domain-model.md) — full event/guard tables,
+  `withdrawn` state, skip-vs-advance split, double-approve concurrency rule
 - [ADR-0004](0004-payments-platform.md) — entitlements consumed by capability gating
 - [ADR-0006](0006-realtime-messaging.md) — chat access is a gated capability
 - User stories US-01, US-02, US-04 (undo), US-13 — `docs/user-stories.md`
