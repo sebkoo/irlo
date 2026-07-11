@@ -137,4 +137,30 @@ describe('subscriptions repository (C-next: webhook consumer executor substrate)
       }),
     ).rejects.toMatchObject({ cause: { code: '23503' } });
   });
+
+  it('rejects a duplicate (provider, providerSubscriptionId, generation) with 23505 instead of silently recovering', async () => {
+    const repo = createSubscriptionsRepository(testDb.db);
+    const providerSubscriptionId = `sub_${randomUUID()}`;
+    const generationInput = {
+      memberId: seedMemberId,
+      provider: 'stripe' as const,
+      providerSubscriptionId,
+      generation: 1,
+      state: 'active' as const,
+      productId: 'price_monthly',
+      willRenew: true,
+      currentPeriodEnd: null,
+      highWater: null,
+    };
+    await repo.createGeneration(generationInput);
+
+    // Deliberately no catch-and-recover here (unlike ledger/inbox's
+    // naturalKey/(source,event_id), which legitimately see the same key
+    // redelivered under at-least-once semantics): a generation conflict
+    // means concurrent processing raced, which must surface as an error,
+    // not be silently absorbed into whichever row happened to exist.
+    await expect(repo.createGeneration(generationInput)).rejects.toMatchObject({
+      cause: { code: '23505' },
+    });
+  });
 });
