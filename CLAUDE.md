@@ -109,6 +109,10 @@ from a session where the file just changed.
   then ask — never swap a plan-recorded fact silently.
 - Pause for review at each `NEXT_STEPS.md` milestone boundary with `git log --oneline` since
   the last push, plus a test/coverage summary.
+- **`make test-ci` before every push:** runs the exact commands CI runs (`pnpm -r typecheck`,
+  `lint`, `format`, `test:coverage`) — not `make test`/`pnpm -r test`, which skips coverage and
+  can pass locally while CI's coverage-gate check fails. Discovered 2026-07: a push landed on a
+  green `pnpm -r test` that then failed CI's `test:coverage` on an uncovered branch.
 - **Identity scan before every push:** `git log --format='%an %ae' <last-push-sha>..HEAD | sort -u`
   must return exactly one line, `Ben Koo seb.m.koo@gmail.com` (this repo's identity is set
   locally; the global git config is a different identity that must never leak into this

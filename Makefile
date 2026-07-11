@@ -9,7 +9,7 @@ IOS_DEST := platform=iOS Simulator,name=$(IOS_SIM_DEVICE),OS=$(IOS_SIM_OS)
 # Extra xcodebuild args (e.g. CI passes -resultBundlePath for artifacts/coverage)
 IOS_TEST_EXTRA_ARGS ?=
 
-.PHONY: bootstrap test test-server test-ios lint media
+.PHONY: bootstrap test test-server test-ios test-ci lint media
 
 bootstrap: ## Install pinned toolchain and workspace dependencies
 	mise install
@@ -19,8 +19,15 @@ bootstrap: ## Install pinned toolchain and workspace dependencies
 
 test: test-server test-ios ## Run every test suite
 
-test-server: ## Server + contracts (Vitest)
+test-server: ## Server + contracts (Vitest, no coverage — fast local loop)
 	pnpm -r test
+
+test-ci: ## Exact commands CI runs for server/contracts — run before every push
+	pnpm install --frozen-lockfile
+	pnpm -r typecheck
+	pnpm -r lint
+	pnpm -r format
+	pnpm -r test:coverage
 
 test-ios: ## iOS unit + UI canaries (XCTest/XCUITest)
 	cd $(IOS_DIR) && xcodegen generate && xcodebuild \
