@@ -57,6 +57,10 @@ Strict red → green → refactor. Commit triplets:
 - iOS: XCTest for ViewModels/repositories; one XCUITest journey per client story; swift-snapshot-testing for Deck cards & paywall; StoreKitTest with a local `.storekit` config.
 - Coverage gates (CI): `server/src` ≥ 90% (payments + admission state machines: 100% branch), `IrloKit` ≥ 85%. Badges appear only when real.
 - Every user story (`docs/user-stories.md`) maps to named tests **before** implementation — the PR template enforces it.
+- After each completed TDD triplet, and always before a push, invoke the `code-reviewer`
+  subagent (proactively, or via `/review`) over the diff since the last review marker.
+  `BLOCKING` findings must be fixed and re-reviewed before proceeding; record the reviewed SHA
+  in `.claude/state/last-reviewed-sha`.
 
 ## Commit grammar
 
@@ -75,10 +79,15 @@ Strict red → green → refactor. Commit triplets:
 | Mechanical scaffolding (configs, templates) | Sonnet 5 | medium | normal |
 | Canary tests, CI workflows | Sonnet 5 | high | normal |
 | README / docs copywriting | Opus 4.8 | high | normal |
-| Final self-review subagent | Opus 4.8 | high | subagent |
+| Review subagent (`code-reviewer`) | Opus 4.8 | xhigh | frontmatter-pinned |
 
 Announce the active row before each phase; if the session model differs, proceed and note what
-would have been used. **Never downgrade** on ADRs, payments design, or naming verification.
+would have been used. **Never downgrade** on ADRs, payments design, or naming verification. The
+review row is enforced in `.claude/agents/code-reviewer.md` frontmatter (`model: opus`,
+`effort: xhigh`) — but a pin only takes effect once the agent registry (re)loads that file (new
+session, or `/agents` mid-session); a review run before that reload silently runs on whatever
+was cached. Confirm the reviewer's self-reported model/effort before trusting `Safe to push: yes`
+from a session where the file just changed.
 
 ## Definition of done
 
