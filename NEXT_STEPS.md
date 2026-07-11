@@ -43,14 +43,33 @@ stages don't describe the same work twice.
 
 ## Stage 2 — Entitlements & admission (≈C23–C34) — US-01, US-02
 
-- C23–C25 entitlement service logic — the transition executor, ledger repository, and
-  idempotency-layer wiring over the ADR-0009 tables C21 already created (schema/tables
-  moved to Stage 1 as ADR-0009's persistence substrate; this triplet is service logic,
-  not schema, per the 2026-07-11 C21 scope note above)
+- C23 entitlement service logic — ledger repository (done: append/getBalance,
+  idempotency layer 2 on `natural_key`) + inbox repository (done: tryInsert,
+  idempotency layer 1 on `(source, event_id)`) — over the ADR-0009 tables C21
+  already created (schema/tables moved to Stage 1 as ADR-0009's persistence
+  substrate; this triplet is service logic, not schema, per the 2026-07-11 C21
+  scope note above). **Remaining: the transition executor itself** — see the
+  next-session opener below.
+- C24–C25 subscription state-machine reducer wiring (executor calls into the
+  C23 repositories; idempotency layer 3 — the monotonic `highWater` guard —
+  lands here, since it's state-transition logic, not repository logic)
 - C26–C27 capability check `can(member, capability)` + gating middleware
 - C28–C31 admission state machine (pure core, 100% branch) + persistence
 - C32–C33 waitlist lanes + `waitlist.skip` consumption (idempotent)
 - C34 admission audit log + evidence (sequence diagram, hurl transcripts)
+
+**Next-session opener (2026-07-11 close):** subscription state-machine reducer
+triplets — implement ADR-0009 §3b's tables verbatim (states, events, guards,
+terminal absorption), including a named test for I5a's stale-but-economic case
+(a stale event that must still append its ledger grant/credit while suppressing
+only the state transition — see ADR-0009 §3f). The Stage 3 escalation note's
+named judgment escalation is already satisfied by ADR-0009 (no design pause
+needed — implementing what the ADR specifies, per the 2026-07-11 decision
+above). Model routing: Sonnet 5 @ high, fresh session. Build on C23's ledger/
+inbox repositories (`server/src/db/repositories/{ledger,inbox}.ts`) and the
+shared `isUniqueViolation` helper (`server/src/db/pg-errors.ts`) — don't
+re-derive idempotency layers 1–2 the executor already has repositories for;
+layer 3 (monotonic state guard) is the new piece this stage adds.
 
 ## Stage 3 — Stripe rail (≈C35–C42) — US-09 (server half), US-10
 
