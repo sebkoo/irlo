@@ -1,6 +1,6 @@
 import type Stripe from 'stripe';
 
-import type { SubscriptionEvent } from '../../domain/subscription-transition.js';
+import type { PurchaseEvent, SubscriptionEvent } from '../../domain/subscription-transition.js';
 
 /**
  * ADR-0009 §3b's Stripe event-mapping table, the Stripe-rail counterpart to
@@ -9,19 +9,19 @@ import type { SubscriptionEvent } from '../../domain/subscription-transition.js'
  * (`server/src/domain/subscription-transition.ts`) understands — no I/O, no
  * idempotency (that's the executor's job, same split as the reducer itself).
  *
- * Only `event.type` is read here, not the full Stripe.Event payload, so the
- * parameter is narrowed to that — real fixtures don't need to be fully
- * populated to exercise this function.
+ * Each case reads only the fields it needs from the real Stripe types
+ * (`Pick<Stripe.Invoice, ...>`, etc.), not the full `Stripe.Event` payload —
+ * real fixtures don't need to be fully populated to exercise this function,
+ * while tsc still catches a field rename in the SDK.
  *
  * §3b coverage — every Stripe row's disposition, so the mapping stays
  * auditable (an unmapped row silently falling into `'unsupported'` is
  * indistinguishable from a genuinely out-of-scope event otherwise):
  * - Mapped here: invoice.payment_failed, customer.subscription.deleted,
- *   charge.refunded (see the three cases below).
- * - Deferred to a follow-up triplet, each needs payload branching this
- *   type-only switch can't do: invoice.paid (billing_reason distinguishes
- *   'purchased', routed to applyPurchase, from 'renewed', routed to
- *   applyEvent); customer.subscription.updated (previous_attributes
+ *   charge.refunded, invoice.paid (billing_reason branches 'purchased' vs
+ *   'renewed' vs unsupported — see its own case below).
+ * - Deferred to a follow-up triplet, needs payload branching this switch
+ *   doesn't yet do: customer.subscription.updated (previous_attributes
  *   diffing distinguishes autorenew_set from plan_changed);
  *   charge.dispute.closed (only a `status: 'lost'` dispute is refund-
  *   equivalent — a 'won' dispute isn't a subscription event at all).
@@ -32,7 +32,31 @@ import type { SubscriptionEvent } from '../../domain/subscription-transition.js'
  */
 export type NormalizedStripeEvent =
   | { kind: 'subscription_event'; event: SubscriptionEvent }
+  | { kind: 'purchase_event'; event: PurchaseEvent }
   | { kind: 'unsupported'; stripeEventType: string };
+
+/**
+ * Each handled Stripe event type paired with only the payload fields its
+ * case actually reads — not `Stripe.Event` itself, which would force every
+ * test fixture (including the type-only cases above) to populate the SDK's
+ * full required-field set. The catch-all arm still types `type` as every
+ * *other* real Stripe event-type literal (via `Exclude`), so a typo in a
+ * case label would be a compile error, not a silent no-op.
+ */
+type StripeNormalizerInput =
+  | { type: 'invoice.payment_failed' }
+  | { type: 'customer.subscription.deleted' }
+  | { type: 'charge.refunded' }
+  | { type: 'invoice.paid'; data: { object: Pick<Stripe.Invoice, 'billing_reason' | 'total'> } }
+  | {
+      type: Exclude<
+        Stripe.Event['type'],
+        | 'invoice.payment_failed'
+        | 'customer.subscription.deleted'
+        | 'charge.refunded'
+        | 'invoice.paid'
+      >;
+    };
 
 /**
  * Stripe has no native grace period (unlike Apple's GRACE_PERIOD subtype):
@@ -42,7 +66,7 @@ export type NormalizedStripeEvent =
  */
 const STRIPE_GRACE_POLICY = true;
 
-export function normalizeStripeEvent(event: Pick<Stripe.Event, 'type'>): NormalizedStripeEvent {
+export function normalizeStripeEvent(event: StripeNormalizerInput): NormalizedStripeEvent {
   switch (event.type) {
     case 'invoice.payment_failed':
       return {
@@ -70,6 +94,31 @@ export function normalizeStripeEvent(event: Pick<Stripe.Event, 'type'>): Normali
       // product (a one-time charge) is added; this would need to branch
       // on whether the refunded charge is actually invoice-linked.
       return { kind: 'subscription_event', event: { type: 'refunded' } };
+
+    case 'invoice.paid': {
+      const { billing_reason, total } = event.data.object;
+
+      if (billing_reason === 'subscription_create') {
+        // No direct 'is this a trial' field on the Invoice itself — total
+        // === 0 is Stripe's own signal that nothing was actually charged
+        // (a trial-start invoice), a heuristic rather than an explicit
+        // flag. Revisit if a future $0 non-trial promo makes this
+        // ambiguous.
+        return {
+          kind: 'purchase_event',
+          event: { type: 'purchased', offerPresent: total === 0 },
+        };
+      }
+
+      if (billing_reason === 'subscription_cycle') {
+        return { kind: 'subscription_event', event: { type: 'renewed' } };
+      }
+
+      // Other billing_reason values (subscription_update,
+      // subscription_threshold, manual, ...) aren't in ADR-0009 §3b's
+      // table — genuinely unsupported for now, not silently mis-mapped.
+      return { kind: 'unsupported', stripeEventType: event.type };
+    }
 
     default:
       return { kind: 'unsupported', stripeEventType: event.type };
