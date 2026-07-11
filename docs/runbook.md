@@ -43,11 +43,19 @@ Docker runtime** here instead (`brew install colima docker docker-compose`,
   into the CLI plugin path once: `mkdir -p ~/.docker/cli-plugins && ln -sfn
   "$(brew --prefix docker-compose)/bin/docker-compose"
   ~/.docker/cli-plugins/docker-compose`.
-- Testcontainers needs `DOCKER_HOST=unix://$HOME/.colima/default/docker.sock`
-  when the `colima` context isn't picked up automatically by a test runner's
-  environment (`.env.test` / CI env var, not committed to `.env.example`,
-  which documents the *contract* server code reads — Testcontainers reads
-  Docker's own config, not the app's).
+- **Confirmed, not hypothetical:** Testcontainers-node does *not* pick up the
+  `colima` Docker context automatically — it fails outright ("Could not find
+  a working container runtime strategy") without `DOCKER_HOST` set. Separately,
+  colima's Ryuk reaper sidecar fails to bind-mount the colima socket across
+  the VM boundary ("mkdir .../docker.sock: operation not supported") unless
+  Ryuk is disabled. `server/test/support/testcontainers-colima.ts` (a Vitest
+  `setupFiles` entry) sets both automatically — `DOCKER_HOST=unix://$HOME/
+  .colima/default/docker.sock` and `TESTCONTAINERS_RYUK_DISABLED=true` — but
+  only when `DOCKER_HOST` isn't already set and the colima socket file exists,
+  so it never overrides an explicit choice and never fires on a non-colima
+  machine (CI's native Docker is unaffected). Not in `.env.example`, which
+  documents the *app's* runtime contract — Testcontainers reads Docker's own
+  config, not the app's.
 
 ## Escalation
 
