@@ -202,6 +202,15 @@ export function applyEvent(
   }
 
   if (isContextEvent(event)) {
+    // Deliberately 'applied', even on a terminal aggregate: I6 absorbs
+    // state transitions specifically, and C25 already established that
+    // non-state fields (currentPeriodEnd, highWater) keep updating past a
+    // terminal state — see the ok-branch below, which does the same for
+    // period context on a no_op_terminal transition. A dead generation's
+    // willRenew/productId affect nothing (a resubscribe is a new
+    // generation), so recording the update as applied rather than
+    // no_op_terminal is harmless and consistent with that established
+    // reading, not a special case invented for context events.
     return {
       aggregate: {
         ...applyContextEvent(aggregate, event),
@@ -228,9 +237,14 @@ export function applyEvent(
   }
 
   return {
+    // Only `state` comes from `result.aggregate` — transition() never
+    // touches willRenew or any other context field, so those default-carry
+    // from `aggregate` unchanged. Spelled out (not `...result.aggregate`)
+    // so a future transition() change that touches another field can't
+    // silently ride along here uncovered by this line's own review.
     aggregate: {
       ...aggregate,
-      ...result.aggregate,
+      state: result.aggregate.state,
       currentPeriodEnd: mergePeriodEnd(aggregate.currentPeriodEnd, periodEnd),
       highWater: effectiveAt,
     },
