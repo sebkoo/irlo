@@ -89,6 +89,17 @@ harness files (`.claude/agents/code-reviewer.md`), not in anyone's memory —
 that part survives context resets and new contributors unchanged; only the
 *runtime* pickup is session-boundary-gated.
 
+**Operational note (2026-07):** subagent definition edits take effect at
+session start; a mid-session `/agents` reload was observed insufficient —
+two consecutive live `code-reviewer` invocations in the same session both
+kept running the pre-edit cached definition even after `/agents` was invoked
+to force a reload, while the on-disk file was independently verified correct.
+Root cause unconfirmed. Until it is, treat a fresh session as the only
+confirmed-working reload path: rotate sessions after any harness (agent
+frontmatter) change, and have the subagent self-report its running
+model/effort at the end of its own output before trusting a result as
+evidence the new frontmatter took effect.
+
 ## Velocity notes
 
 Cycle time per story (idea → merged with evidence) gets recorded here from
