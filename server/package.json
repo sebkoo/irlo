@@ -31,6 +31,7 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
-    "@irlo/contracts": "workspace:*"
+    "@irlo/contracts": "workspace:*",
+    "fastify": "5.10.0"
   }
 }
