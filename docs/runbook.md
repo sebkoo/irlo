@@ -27,6 +27,28 @@
 6. **Write it down** — even a solo project gets a short postmortem in the issue:
    what happened, why, and the test that now prevents it.
 
+## Local dev environment (colima)
+
+Docker Desktop is blocked on this managed machine (cask install fails on the
+credential-helper linking step under `sudo`); **colima is the supported local
+Docker runtime** here instead (`brew install colima docker docker-compose`,
+`colima start`). Two colima-specific gotchas, found landing C21 (2026-07-11):
+
+- Leftover `credsStore: "desktop"` in `~/.docker/config.json` from a prior
+  Docker Desktop install attempt breaks public image pulls under colima
+  (`docker-credential-desktop` executable not found) — remove the key. `auths`
+  stays empty for public-only pulls; no replacement credential helper needed.
+- `docker compose` (the space-form v2 subcommand used by `make dev-up` and CI)
+  isn't wired up by a standalone Homebrew `docker-compose` install — symlink it
+  into the CLI plugin path once: `mkdir -p ~/.docker/cli-plugins && ln -sfn
+  "$(brew --prefix docker-compose)/bin/docker-compose"
+  ~/.docker/cli-plugins/docker-compose`.
+- Testcontainers needs `DOCKER_HOST=unix://$HOME/.colima/default/docker.sock`
+  when the `colima` context isn't picked up automatically by a test runner's
+  environment (`.env.test` / CI env var, not committed to `.env.example`,
+  which documents the *contract* server code reads — Testcontainers reads
+  Docker's own config, not the app's).
+
 ## Escalation
 
 Reality: **solo maintainer**. There is no rotation; "escalation" means:

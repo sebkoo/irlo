@@ -22,18 +22,29 @@ endpoints; `/adr-new` when a decision is missing.
 | C16 | zod-parsed env config (12-factor) (done) | `.env.example` becomes the tested contract |
 | C17 | pino structured logging (done) | request IDs; log schema doc |
 | C18 | OpenTelemetry bootstrap | trace context (traceId/spanId) |
-| C19 | docker-compose dev env (Postgres + Redis) (done — contract-validated; runtime bring-up pending Docker Desktop first-launch) | Brewfile cask is `docker-desktop` (Homebrew renamed `docker`); compose↔.env.example sync is test-enforced |
-| C20–C22 | Drizzle + migrations + Testcontainers repository triplet | first tables: members + the ADR-0009 truth logs/projections |
+| C19 | docker-compose dev env (Postgres + Redis) (done — runtime-verified: `make dev-up` → both containers healthy → `make dev-down`) | Local runtime is colima, not Docker Desktop (blocked on this managed machine); see `docs/runbook.md` #Local dev environment |
+| C20 | DATABASE_URL env contract + Drizzle client factory (done) | optional until Stage 2 boot-wires the pool |
+| C21–C22 | Drizzle schema/migrations (Testcontainers-verified) + members repository triplet | first tables: members + the ADR-0009 truth logs/projections |
 
 **Reorder (2026-07-11):** the Stage 2 entitlement domain model is designed first —
 [ADR-0009](docs/adr/0009-entitlement-domain-model.md), per CLAUDE.md's named judgment
 escalation — so C19–C22 land as its persistence substrate rather than ahead of it.
 C18 (OTel) is unaffected and may land either side.
 
+**C21 scope note (2026-07-11):** C21 builds the *full* ADR-0009 schema — all seven
+tables (members, payment_events, ledger_entries, admission_events, subscriptions,
+consumable_balances, applications), not just `members` — as Testcontainers-verified
+migrations with no business logic. This widens Stage 1's original "first table:
+members" scope (set before ADR-0009 existed); Stage 2's C23–C25 is re-scoped below
+from schema work to service logic over these already-existing tables, so the two
+stages don't describe the same work twice.
+
 ## Stage 2 — Entitlements & admission (≈C23–C34) — US-01, US-02
 
-- C23–C25 entitlement service schema + ledger tables (append-only, triplet) per
-  [ADR-0009](docs/adr/0009-entitlement-domain-model.md)
+- C23–C25 entitlement service logic — the transition executor, ledger repository, and
+  idempotency-layer wiring over the ADR-0009 tables C21 already created (schema/tables
+  moved to Stage 1 as ADR-0009's persistence substrate; this triplet is service logic,
+  not schema, per the 2026-07-11 C21 scope note above)
 - C26–C27 capability check `can(member, capability)` + gating middleware
 - C28–C31 admission state machine (pure core, 100% branch) + persistence
 - C32–C33 waitlist lanes + `waitlist.skip` consumption (idempotent)
@@ -92,10 +103,6 @@ C18 (OTel) is unaffected and may land either side.
 
 ## Deferred / parked items
 
-- C19 runtime verification: first successful `make dev-up` with healthy
-  `docker compose ps` output — blocked on Docker Desktop install (sudo) + GUI
-  first-launch acceptance (Ben). The compose file is contract-validated only
-  until this lands.
 - README CI/coverage badges — add only after the first green CI run (may already
   be done post-push; check).
 - Manual KIPRIS trademark session before any commercial use (`docs/naming/verification.md` #12).

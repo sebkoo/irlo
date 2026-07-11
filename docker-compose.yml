@@ -1,6 +1,8 @@
 # Local dev datastores (C19; ADR-0003 substrate for ADR-0009's tables).
 # Credentials/ports mirror .env.example — server/test/dev-env.compose.test.ts
 # enforces the sync, so change both together.
+# Local runtime: colima, not Docker Desktop, on managed machines where Desktop
+# is blocked — setup + gotchas in docs/runbook.md #Local dev environment (colima).
 services:
   postgres:
     image: postgres:17-alpine
