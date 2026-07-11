@@ -1,12 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
 
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { sql } from 'drizzle-orm';
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { createDb, type Db } from '../src/db/client.js';
 import {
   admissionEvents,
   applications,
@@ -17,28 +13,21 @@ import {
   subscriptions,
 } from '../src/db/schema/index.js';
 
-// Testcontainers spins up a real postgres:17-alpine container per run — first
-// invocation on a machine pulls the image (network + disk activity is
-// expected). Matches docker-compose.yml's pinned tag.
-const MIGRATIONS_FOLDER = fileURLToPath(new URL('../drizzle', import.meta.url));
+import { startTestDb, stopTestDb, type TestDb } from './support/testcontainers-postgres.js';
 
-let container: StartedPostgreSqlContainer;
-let dbHandle: Db;
+let testDb: TestDb;
 let seedMemberId: string;
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:17-alpine').start();
-  dbHandle = createDb(container.getConnectionUri());
-  await migrate(dbHandle.db, { migrationsFolder: MIGRATIONS_FOLDER });
+  testDb = await startTestDb();
 
-  const [seedMember] = await dbHandle.db.insert(members).values({}).returning({ id: members.id });
+  const [seedMember] = await testDb.db.insert(members).values({}).returning({ id: members.id });
   if (!seedMember) throw new Error('seed member insert returned no row');
   seedMemberId = seedMember.id;
 }, 120_000);
 
 afterAll(async () => {
-  await dbHandle.pool.end();
-  await container.stop();
+  await stopTestDb(testDb);
 });
 
 /**
@@ -57,7 +46,7 @@ async function expectForeignKeyViolation(promise: Promise<unknown>): Promise<voi
 
 describe('ADR-0009 schema + migrations (C21)', () => {
   it('creates all seven tables with the expected column shape', async () => {
-    const result = await dbHandle.db.execute(sql`
+    const result = await testDb.db.execute(sql`
       select table_name, column_name
       from information_schema.columns
       where table_schema = 'public'
@@ -145,15 +134,15 @@ describe('ADR-0009 schema + migrations (C21)', () => {
       disposition: 'applied' as const,
     };
 
-    await dbHandle.db.insert(paymentEvents).values(row);
+    await testDb.db.insert(paymentEvents).values(row);
 
-    await expectUniqueViolation(dbHandle.db.insert(paymentEvents).values(row));
+    await expectUniqueViolation(testDb.db.insert(paymentEvents).values(row));
   });
 
   it('enforces ledger_entries natural_key uniqueness — idempotency layer 2 (I3)', async () => {
     const naturalKey = `stripe:invoice:${randomUUID()}`;
 
-    await dbHandle.db.insert(ledgerEntries).values({
+    await testDb.db.insert(ledgerEntries).values({
       memberId: seedMemberId,
       entryType: 'grant',
       creditType: 'irlo_plus',
@@ -161,7 +150,7 @@ describe('ADR-0009 schema + migrations (C21)', () => {
     });
 
     await expectUniqueViolation(
-      dbHandle.db.insert(ledgerEntries).values({
+      testDb.db.insert(ledgerEntries).values({
         memberId: seedMemberId,
         entryType: 'reversal',
         creditType: 'irlo_plus',
@@ -180,15 +169,15 @@ describe('ADR-0009 schema + migrations (C21)', () => {
       productId: 'irlo.plus.monthly',
     };
 
-    await dbHandle.db.insert(subscriptions).values(row);
+    await testDb.db.insert(subscriptions).values(row);
 
-    await expectUniqueViolation(dbHandle.db.insert(subscriptions).values(row));
+    await expectUniqueViolation(testDb.db.insert(subscriptions).values(row));
   });
 
   it('allows a second subscription generation for the same provider subscription id — resubscribe (I6)', async () => {
     const providerSubscriptionId = `sub_${randomUUID()}`;
 
-    await dbHandle.db.insert(subscriptions).values({
+    await testDb.db.insert(subscriptions).values({
       memberId: seedMemberId,
       provider: 'apple',
       providerSubscriptionId,
@@ -198,7 +187,7 @@ describe('ADR-0009 schema + migrations (C21)', () => {
     });
 
     await expect(
-      dbHandle.db.insert(subscriptions).values({
+      testDb.db.insert(subscriptions).values({
         memberId: seedMemberId,
         provider: 'apple',
         providerSubscriptionId,
@@ -212,12 +201,12 @@ describe('ADR-0009 schema + migrations (C21)', () => {
   it('rejects a second live application for the same (member, crew) — I8 partial unique index', async () => {
     const crewId = randomUUID();
 
-    await dbHandle.db
+    await testDb.db
       .insert(applications)
       .values({ memberId: seedMemberId, crewId, state: 'submitted' });
 
     await expectUniqueViolation(
-      dbHandle.db
+      testDb.db
         .insert(applications)
         .values({ memberId: seedMemberId, crewId, state: 'under_review' }),
     );
@@ -226,7 +215,7 @@ describe('ADR-0009 schema + migrations (C21)', () => {
   it('allows a new generation once the prior application is terminal — I8 partial index scope', async () => {
     const crewId = randomUUID();
 
-    await dbHandle.db.insert(applications).values({
+    await testDb.db.insert(applications).values({
       memberId: seedMemberId,
       crewId,
       state: 'rejected',
@@ -234,19 +223,19 @@ describe('ADR-0009 schema + migrations (C21)', () => {
     });
 
     await expect(
-      dbHandle.db
+      testDb.db
         .insert(applications)
         .values({ memberId: seedMemberId, crewId, generation: 2, state: 'submitted' }),
     ).resolves.not.toThrow();
   });
 
   it('enforces consumable_balances composite primary key on (member_id, credit_type)', async () => {
-    await dbHandle.db
+    await testDb.db
       .insert(consumableBalances)
       .values({ memberId: seedMemberId, creditType: 'spark', balance: 5 });
 
     await expectUniqueViolation(
-      dbHandle.db
+      testDb.db
         .insert(consumableBalances)
         .values({ memberId: seedMemberId, creditType: 'spark', balance: 10 }),
     );
@@ -254,14 +243,14 @@ describe('ADR-0009 schema + migrations (C21)', () => {
 
   it('logs an admission_events row against a real application via foreign key (I9)', async () => {
     const crewId = randomUUID();
-    const [application] = await dbHandle.db
+    const [application] = await testDb.db
       .insert(applications)
       .values({ memberId: seedMemberId, crewId, state: 'submitted' })
       .returning({ id: applications.id });
     if (!application) throw new Error('application insert returned no row');
 
     await expect(
-      dbHandle.db.insert(admissionEvents).values({
+      testDb.db.insert(admissionEvents).values({
         applicationId: application.id,
         event: 'submit',
         actor: `member:${seedMemberId}`,
@@ -271,7 +260,7 @@ describe('ADR-0009 schema + migrations (C21)', () => {
 
   it('rejects a ledger_entries row against a nonexistent member — FK enforcement', async () => {
     await expectForeignKeyViolation(
-      dbHandle.db.insert(ledgerEntries).values({
+      testDb.db.insert(ledgerEntries).values({
         memberId: randomUUID(),
         entryType: 'credit',
         creditType: 'spark',
@@ -282,7 +271,7 @@ describe('ADR-0009 schema + migrations (C21)', () => {
 
   it('rejects an admission_events row against a nonexistent application — FK enforcement', async () => {
     await expectForeignKeyViolation(
-      dbHandle.db.insert(admissionEvents).values({
+      testDb.db.insert(admissionEvents).values({
         applicationId: randomUUID(),
         event: 'submit',
         actor: `member:${seedMemberId}`,
