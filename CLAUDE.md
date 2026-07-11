@@ -66,6 +66,11 @@ Strict red → green → refactor. Commit triplets:
 
 - Conventional Commits 1.0; imperative subject ≤ 72 chars; body explains **why**.
 - One logical concern per commit; every commit leaves `make test` green once targets exist.
+- **Co-Authored-By policy: every AI-assisted commit carries the
+  `Co-Authored-By: Claude <model> <noreply@anthropic.com>` trailer — all of them, always**
+  (matches the transparency ethos; the AI methodology is a deliverable, not a secret). The
+  push-gate identity scan (`%an %ae`) is unaffected: trailers live in the message body, never
+  the author field.
 - Correcting an unpushed planned commit: `git commit --fixup <target>` then
   `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <base>` — never a stray fix commit.
 - Never force-push. Ask before any push to a remote.
