@@ -6,7 +6,9 @@ C16 (zod-parsed runtime env config), and C17 (pino structured logging) are
 done. **Nothing below C17 is implemented.** Work proceeds backend-first
 in the order that maximizes JD evidence: entitlements & admission → Stripe rail
 → App Store rail → reconciliation → Deck feed → chat → iOS client flows → web
-checkout → RN screen → AI ranking.
+checkout → RN screen. AI ranking (**Stage AI**, below) is orthogonal to this
+chain — its design is ungated, its code is gated on entitlements + Stripe +
+Deck feed specifically, not on finishing the whole chain first.
 
 Conventions: every feature lands as a TDD triplet `test → feat → refactor`
 (refactor optional but preferred), plus an evidence task per story
@@ -63,7 +65,9 @@ stages don't describe the same work twice.
   specifies needs no new design pause. A fresh escalation triggers only if
   implementation surfaces a genuine domain-design gap (already a stop-and-show-evidence
   event under CLAUDE.md's deviation rule), or when a genuinely new domain arrives
-  (Deck feed ranking, Stage 6; messaging fan-out, Stage 7).
+  (Deck feed re-ranking → **Stage AI (ADR-0010)**, below; messaging fan-out, Stage 7).
+  Stage 6's own `ranking v0 (recency/distance)` heuristic is ordinary sort logic, not a
+  new domain, and needs no escalation — see Stage 6's note.
 
 ## Stage 4 — App Store rail (≈C43–C49) — US-07, US-08 (server half)
 
@@ -81,6 +85,9 @@ stages don't describe the same work twice.
 - Activity model + geo query (`TODO(decide)`: geo indexing approach — PostGIS vs
   earthdistance vs H3; take via `/adr-new`) · feed contract + pagination ·
   ranking v0 (recency/distance) · seed script.
+- **Note:** heuristic ranking only — no escalation; AI re-ranking lives in
+  Stage AI / ADR-0010 (below), whose *implementation* is gated on this stage
+  existing first (there is nothing to re-rank before the feed does).
 
 ## Stage 7 — Chat gateway (≈C59–C66) — US-06, US-13
 
@@ -94,15 +101,48 @@ stages don't describe the same work twice.
   StoreKit 2 purchase/restore with StoreKitTest · CoreData offline cache ·
   snapshot tests for Deck cards & paywall.
 
-## Stage 9 — Web checkout, RN screen, AI ranking (≈C75–C80)
+## Stage 9 — Web checkout, RN screen (≈C75–C80)
 
 - Stripe Checkout web page (US-09 web half) · React Native brownfield Events
-  screen (TurboModule) · pgvector embeddings ranking + LLM moderation behind a
-  provider-agnostic interface — the retrieval-layer entry point (layers 1–3,
-  `docs/ai/methodology.md` §The five-layer AI stack; study-map rows 10–14).
+  screen (TurboModule). AI ranking is **not** part of this stage's C-range — it's
+  **Stage AI — retrieval slice**, below (its own orthogonal gating; study-map
+  rows 10–14).
+
+## Stage AI — retrieval slice (planned, not started)
+
+**Sequencing — split gate.** The **ADR-0010 design session** (Plan Mode, escalated model) is
+**ungated**: it needs no Deck feed to exist and may be pulled forward, including for interview
+value. **Implementation** (code) is gated on Stage 2's transition executor (C23–C25), Stage 3's
+Stripe rail (the first webhook rail), **and Stage 6's Deck feed** — there is nothing to re-rank
+before the feed exists. Not given C-numbers yet; positioned here (after Stage 9) as an
+orthogonal track: its *design* isn't Stage-N-sequenced, but its *code* now explicitly is.
+
+**Escalation:** per the Stage 3 escalation note's named new-domain trigger — Deck feed
+re-ranking → **Stage AI (ADR-0010)** — implementation begins with a Plan-Mode design session on
+the escalated model before any code, not a continuation of ADR-0009's scope.
+
+pgvector Deck re-ranking MVP mapped to the five-layer AI stack
+(`docs/ai/methodology.md` §The five-layer AI stack):
+
+- **Retrieval:** embeddings via a provider-agnostic interface; pgvector + HNSW index on the
+  existing Postgres (no separate vector DB); a deterministic fake embedder for tests — no API
+  keys in CI.
+- **Efficiency:** embedding hash-cache (skip re-embedding unchanged content); per-call
+  cost/latency logging; the provider interface doubles as product-side model routing.
+- **Action:** evidenced by then — the Stripe/App Store integrations (Stages 3–4) precede this
+  slice; later, an MCP server exposing Irlo's own ops endpoints as tools.
+- **Agent:** remains dev-plane only, by design — documented, not duplicated into the product.
+- **Trust:** a golden-set offline eval wired into CI; moderation is slice 2, after the
+  re-ranking MVP, not bundled into it.
 
 ## Deferred / parked items
 
+- CI Docker image-pull caching (e.g. GitHub Actions cache for the Testcontainers
+  postgres:17-alpine layer) — watch, not urgent: the first Testcontainers-enabled
+  server CI run added +16s over the prior baseline (41s vs ~25s; run
+  [29163791797](https://github.com/sebkoo/irlo/actions/runs/29163791797)).
+  Revisit if Stage 2+ adds enough image-pulling tests to push this meaningfully
+  higher.
 - README CI/coverage badges — add only after the first green CI run (may already
   be done post-push; check).
 - Manual KIPRIS trademark session before any commercial use (`docs/naming/verification.md` #12).
