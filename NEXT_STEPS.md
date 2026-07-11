@@ -162,6 +162,14 @@ pgvector Deck re-ranking MVP mapped to the five-layer AI stack
   [29163791797](https://github.com/sebkoo/irlo/actions/runs/29163791797)).
   Revisit if Stage 2+ adds enough image-pulling tests to push this meaningfully
   higher.
+- `TODO(decide)`: ADR-0009 §3b's diagram has no `trial → grace`/`billing_retry` edge,
+  so `trial + renewal_failed` is `invalid_transition` in C24's reducer (faithful to
+  the ADR as written) — but a free-trial that fails to convert to paid is a real
+  Apple flow (DID_FAIL_TO_RENEW at trial end). Confirm against real App Store Server
+  Notification fixtures when Stage 4 lands: does the normalizer map that flow to
+  `period_expired` (trial→expired, forgoing dunning) by design, or is §3b missing an
+  edge? Found in code-reviewer's C24 review (2026-07-11) — not a bug in C24, which
+  correctly implements the ADR as specified.
 - README CI/coverage badges — add only after the first green CI run (may already
   be done post-push; check).
 - Manual KIPRIS trademark session before any commercial use (`docs/naming/verification.md` #12).
