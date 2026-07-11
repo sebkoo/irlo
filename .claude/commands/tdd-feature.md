@@ -19,8 +19,9 @@ Implement **$ARGUMENTS** as a TDD triplet per CLAUDE.md §TDD protocol.
 4. **Refactor** (preferred, optional). Improve names/structure with tests green at
    every step. Commit: `refactor(<scope>): <what improved>`
 5. **Evidence.** Run `/capture-media $ARGUMENTS` (or note why deferred).
-6. **Review.** Launch the `code-reviewer` agent on the diff; resolve BLOCKERS before
-   declaring done.
+6. **Review.** Run `/review` (or launch `code-reviewer` directly) over the diff since
+   the last review marker. Resolve `BLOCKING` findings and re-review before declaring
+   done; only proceed to a push once the subagent reports `Safe to push: yes`.
 
 Rules: never write implementation before the red commit exists; never weaken a
 coverage gate; state machines (payments, admission) require 100% branch coverage.
