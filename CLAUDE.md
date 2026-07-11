@@ -69,6 +69,13 @@ Strict red → green → refactor. Commit triplets:
 - Correcting an unpushed planned commit: `git commit --fixup <target>` then
   `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <base>` — never a stray fix commit.
 - Never force-push. Ask before any push to a remote.
+- Local commits are auto-mode (edit and commit freely without asking). Push is never
+  automatic — batch pushes at `NEXT_STEPS.md` milestone checkpoints only, and only after local
+  `make test` is green and a secret grep passes.
+- **New-dependency gate:** before any `pnpm add` / SPM addition, announce the exact
+  `package@version`, confirm it's the canonical registry package (publisher, weekly downloads),
+  pin it, note why in the commit body, and commit the lockfile in the same commit — no
+  transitive surprises.
 
 ## Model routing (§1)
 
@@ -82,12 +89,27 @@ Strict red → green → refactor. Commit triplets:
 | Review subagent (`code-reviewer`) | Opus 4.8 | xhigh | frontmatter-pinned |
 
 Announce the active row before each phase; if the session model differs, proceed and note what
-would have been used. **Never downgrade** on ADRs, payments design, or naming verification. The
+would have been used. **Never downgrade** on ADRs, payments design, or naming verification.
+
+**Named judgment escalations:** for ADR-weight domain decisions — the entitlement domain model
+(Stage 2) and the subscription state machine (Stage 3) specifically — pause, switch to Plan
+Mode, and escalate the model per this table before designing; don't proceed on the session
+model.
+
+The
 review row is enforced in `.claude/agents/code-reviewer.md` frontmatter (`model: opus`,
 `effort: xhigh`) — but a pin only takes effect once the agent registry (re)loads that file (new
 session, or `/agents` mid-session); a review run before that reload silently runs on whatever
 was cached. Confirm the reviewer's self-reported model/effort before trusting `Safe to push: yes`
 from a session where the file just changed.
+
+## Checkpoints
+
+- Any departure from `NEXT_STEPS.md` order, a recorded ADR decision, or a plan-recorded fact
+  (tool/device/version/layout) requires stopping first: show the evidence command + output,
+  then ask — never swap a plan-recorded fact silently.
+- Pause for review at each `NEXT_STEPS.md` milestone boundary with `git log --oneline` since
+  the last push, plus a test/coverage summary.
 
 ## Definition of done
 
