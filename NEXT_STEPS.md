@@ -1,10 +1,11 @@
 # NEXT_STEPS — the Stage 1+ plan of record
 
 Stage 0 (C01–C12) is complete: verified name, toolchain, canary-tested monorepo,
-CI, AI harness, docs. **Nothing below is implemented.** Work proceeds backend-
-first in the order that maximizes JD evidence: entitlements & admission → Stripe
-rail → App Store rail → reconciliation → Deck feed → chat → iOS client flows →
-web checkout → RN screen → AI ranking.
+CI, AI harness, docs. Stage 1 is underway: C13–C15 (`/health` endpoint triplet)
+is done. **Nothing below C13–C15 is implemented.** Work proceeds backend-first
+in the order that maximizes JD evidence: entitlements & admission → Stripe rail
+→ App Store rail → reconciliation → Deck feed → chat → iOS client flows → web
+checkout → RN screen → AI ranking.
 
 Conventions: every feature lands as a TDD triplet `test → feat → refactor`
 (refactor optional but preferred), plus an evidence task per story
@@ -16,7 +17,7 @@ endpoints; `/adr-new` when a decision is missing.
 
 | # | Work | Notes |
 |---|---|---|
-| C13–C15 | `/health` endpoint triplet on Fastify app factory | failing contract test → typed route → app-factory refactor; first supertest |
+| C13–C15 | `/health` endpoint triplet on Fastify app factory (done) | failing contract test → typed route → app-factory refactor; first supertest |
 | C16 | zod-parsed env config (12-factor) | `.env.example` becomes the tested contract |
 | C17–C18 | pino logging + OpenTelemetry bootstrap | request IDs, trace context; log schema doc |
 | C19 | docker-compose dev env (Postgres + Redis) | requires `cask docker` (deferred Brewfile entry) |

@@ -19,8 +19,10 @@ in-person activities — run crews, gallery nights, pickup games.*
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 *The codecov % above is canary-surface coverage, not proof of a tested system:
-Stage 0's `server/src` is one pure `health.ts` function ([ADR-0003](docs/adr/0003-backend-platform.md)).
-It starts measuring real endpoint coverage in Stage 1 — see [`NEXT_STEPS.md`](NEXT_STEPS.md).*
+Stage 1's `server/src` is a Fastify app factory with one `/health` endpoint
+([ADR-0003](docs/adr/0003-backend-platform.md)), covered by a supertest
+integration test. Real coverage grows endpoint-by-endpoint from here — see
+[`NEXT_STEPS.md`](NEXT_STEPS.md).*
 
 </div>
 
@@ -52,10 +54,11 @@ It starts measuring real endpoint coverage in Stage 1 — see [`NEXT_STEPS.md`](
 | **Platform** (Node.js/TypeScript) | Payments dual-rail (StoreKit 2 + Stripe), provider-agnostic entitlements, admission/waitlist state machine, realtime chat, Deck feed API | [`server/`](server/) · [`packages/contracts/`](packages/contracts/) | [ADR-0004](docs/adr/0004-payments-platform.md) · [ADR-0005](docs/adr/0005-member-experience-core.md) *(design docs — implementation is [planned](NEXT_STEPS.md))* |
 | **Clients** | Swift 6 iOS app (UIKit shell + SwiftUI), React Native brownfield screen *(planned)* | [`apps/ios/`](apps/ios/) | [ADR-0008](docs/adr/0008-ios-demo-client.md) · canary tests (XCTest/XCUITest) wired into CI |
 
-Today the repo is **Stage 0**: a verified name, a canary-tested monorepo, CI,
-an AI-native engineering harness, and the full design record. Every feature
-above is planned in [`NEXT_STEPS.md`](NEXT_STEPS.md) — nothing is quietly
-half-built.
+Today the repo is **Stage 1 in progress**: Stage 0's verified name,
+canary-tested monorepo, CI, AI-native engineering harness, and full design
+record, plus a live Fastify `/health` endpoint as the server foundation comes
+online. Every feature above is planned in [`NEXT_STEPS.md`](NEXT_STEPS.md) —
+nothing is quietly half-built.
 
 ## Why Irlo
 
@@ -152,7 +155,7 @@ design-stage — see the ADR trail.*
 ## AI-native workflow
 
 Built in public with Claude Code, and the workflow is itself versioned
-engineering: a <300-line [`CLAUDE.md`](CLAUDE.md), seven encoded slash-command
+engineering: a <300-line [`CLAUDE.md`](CLAUDE.md), eight encoded slash-command
 workflows, format/lint/test hooks, a code-reviewer subagent, and a
 release-blocking [eval checklist](docs/ai/evals.md) for the harness itself.
 Models and efforts used are disclosed per work type in
@@ -163,8 +166,8 @@ the credibility.
 
 | Horizon | Work |
 |---|---|
-| **Now** (done) | Stage 0: verified name · toolchain · canary-tested monorepo · CI · AI harness · full design record (ADR 0001–0008) |
-| **Next** | Server foundation online: Fastify `/health` triplet, env contract, pino+OTel, Docker dev env, Drizzle + Testcontainers → then entitlements & admission (US-01/02) |
+| **Now** (done) | Stage 0: verified name · toolchain · canary-tested monorepo · CI · AI harness · full design record (ADR 0001–0008). Stage 1 underway: Fastify `/health` triplet live |
+| **Next** | Server foundation online: env contract, pino+OTel, Docker dev env, Drizzle + Testcontainers → then entitlements & admission (US-01/02) |
 | **Later** | Stripe rail → App Store rail → reconciliation → Deck feed → chat gateway → iOS flows → web checkout → RN screen → pgvector ranking |
 
 Full sequence with commit-level granularity: [`NEXT_STEPS.md`](NEXT_STEPS.md).

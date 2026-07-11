@@ -96,8 +96,7 @@ would have been used. **Never downgrade** on ADRs, payments design, or naming ve
 Mode, and escalate the model per this table before designing; don't proceed on the session
 model.
 
-The
-review row is enforced in `.claude/agents/code-reviewer.md` frontmatter (`model: opus`,
+The review row is enforced in `.claude/agents/code-reviewer.md` frontmatter (`model: opus`,
 `effort: xhigh`) — but a pin only takes effect once the agent registry (re)loads that file (new
 session, or `/agents` mid-session); a review run before that reload silently runs on whatever
 was cached. Confirm the reviewer's self-reported model/effort before trusting `Safe to push: yes`
