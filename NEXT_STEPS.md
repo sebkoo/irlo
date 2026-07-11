@@ -23,11 +23,17 @@ endpoints; `/adr-new` when a decision is missing.
 | C17 | pino structured logging (done) | request IDs; log schema doc |
 | C18 | OpenTelemetry bootstrap | trace context (traceId/spanId) |
 | C19 | docker-compose dev env (Postgres + Redis) | requires `cask docker` (deferred Brewfile entry) |
-| C20–C22 | Drizzle + migrations + Testcontainers repository triplet | first table: members |
+| C20–C22 | Drizzle + migrations + Testcontainers repository triplet | first tables: members + the ADR-0009 truth logs/projections |
+
+**Reorder (2026-07-11):** the Stage 2 entitlement domain model is designed first —
+[ADR-0009](docs/adr/0009-entitlement-domain-model.md), per CLAUDE.md's named judgment
+escalation — so C19–C22 land as its persistence substrate rather than ahead of it.
+C18 (OTel) is unaffected and may land either side.
 
 ## Stage 2 — Entitlements & admission (≈C23–C34) — US-01, US-02
 
-- C23–C25 entitlement service schema + ledger tables (append-only, triplet)
+- C23–C25 entitlement service schema + ledger tables (append-only, triplet) per
+  [ADR-0009](docs/adr/0009-entitlement-domain-model.md)
 - C26–C27 capability check `can(member, capability)` + gating middleware
 - C28–C31 admission state machine (pure core, 100% branch) + persistence
 - C32–C33 waitlist lanes + `waitlist.skip` consumption (idempotent)
