@@ -114,6 +114,16 @@ two tiers are complementary, not redundant — skipping the milestone sweep
 because the triplets were "already reviewed" is exactly the gap that let
 this through.
 
+**Operational note (2026-07-11): three cases of the harness enforcing its own rules.**
+(1) The reviewer self-report check caught a stale `code-reviewer` definition before a
+result was trusted (agent-reload note above); (2) the milestone-boundary sweep caught
+cross-commit doc drift that three per-triplet reviews had each missed (previous note);
+(3) the model-routing table's named judgment escalation paused Stage 2 until the
+entitlement domain model got a fresh session on the pinned model/effort (Fable 5 · xhigh,
+Plan Mode → ADR-0009). Common thread: rules encoded in harness files — CLAUDE.md, agent
+frontmatter, the routing table — get enforced by the loop itself; rules that live only in
+chat don't survive long enough to be enforced.
+
 ## Velocity notes
 
 Cycle time per story (idea → merged with evidence) gets recorded here from
