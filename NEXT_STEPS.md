@@ -22,7 +22,7 @@ endpoints; `/adr-new` when a decision is missing.
 | C16 | zod-parsed env config (12-factor) (done) | `.env.example` becomes the tested contract |
 | C17 | pino structured logging (done) | request IDs; log schema doc |
 | C18 | OpenTelemetry bootstrap | trace context (traceId/spanId) |
-| C19 | docker-compose dev env (Postgres + Redis) | requires `cask docker` (deferred Brewfile entry) |
+| C19 | docker-compose dev env (Postgres + Redis) (done — contract-validated; runtime bring-up pending Docker Desktop first-launch) | Brewfile cask is `docker-desktop` (Homebrew renamed `docker`); compose↔.env.example sync is test-enforced |
 | C20–C22 | Drizzle + migrations + Testcontainers repository triplet | first tables: members + the ADR-0009 truth logs/projections |
 
 **Reorder (2026-07-11):** the Stage 2 entitlement domain model is designed first —
@@ -45,8 +45,9 @@ C18 (OTel) is unaffected and may land either side.
   fixture events · idempotent processing (dedupe table) · subscription state
   machine wiring · test clocks for renewal/dunning · refund/cancel downgrade
   paths · evidence: asciinema cast of webhook replay being a no-op.
-- **Escalation note (decided 2026-07-11):** the named judgment escalations for the
-  subscription and admission state machines are satisfied by
+- **Escalation note (decided 2026-07-11):** the named judgment escalations — the
+  entitlement domain model (Stage 2) and the subscription state machine (Stage 3), per
+  CLAUDE.md §Model routing — are satisfied by
   [ADR-0009](docs/adr/0009-entitlement-domain-model.md) — implementing what the ADR
   specifies needs no new design pause. A fresh escalation triggers only if
   implementation surfaces a genuine domain-design gap (already a stop-and-show-evidence
@@ -90,7 +91,10 @@ C18 (OTel) is unaffected and may land either side.
 
 ## Deferred / parked items
 
-- `brew "asciinema"`, `cask "docker"` — uncomment in Brewfile when C19 (docker-compose) lands.
+- C19 runtime verification: first successful `make dev-up` with healthy
+  `docker compose ps` output — blocked on Docker Desktop install (sudo) + GUI
+  first-launch acceptance (Ben). The compose file is contract-validated only
+  until this lands.
 - README CI/coverage badges — add only after the first green CI run (may already
   be done post-push; check).
 - Manual KIPRIS trademark session before any commercial use (`docs/naming/verification.md` #12).

@@ -9,13 +9,19 @@ IOS_DEST := platform=iOS Simulator,name=$(IOS_SIM_DEVICE),OS=$(IOS_SIM_OS)
 # Extra xcodebuild args (e.g. CI passes -resultBundlePath for artifacts/coverage)
 IOS_TEST_EXTRA_ARGS ?=
 
-.PHONY: bootstrap test test-server test-ios test-ci lint media
+.PHONY: bootstrap test test-server test-ios test-ci lint media dev-up dev-down
 
 bootstrap: ## Install pinned toolchain and workspace dependencies
 	mise install
 	brew bundle check --no-upgrade || brew bundle
 	pnpm install
 	cd $(IOS_DIR) && xcodegen generate
+
+dev-up: ## Start local dev datastores (Postgres + Redis), wait for healthy
+	docker compose up -d --wait
+
+dev-down: ## Stop local dev datastores (data volume persists)
+	docker compose down
 
 test: test-server test-ios ## Run every test suite
 
