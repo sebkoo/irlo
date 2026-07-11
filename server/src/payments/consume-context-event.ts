@@ -20,6 +20,13 @@ export interface ConsumeContextEventInput {
   provider: SubscriptionProvider;
   providerSubscriptionId: string;
   event: ContextEvent;
+  /**
+   * Present only for `renewal_extended` (Apple's RENEWAL_EXTENDED — Stripe
+   * has no equivalent today). Without this, `renewal_extended` would report
+   * 'applied' while extending nothing: its entire effect is `applyEvent`'s
+   * period-context merge, which needs a periodEnd to merge.
+   */
+  periodEnd?: Date;
 }
 
 export type ConsumeContextEventResult =
@@ -51,7 +58,7 @@ export type ConsumeContextEventResult =
  * classified as 'duplicate' — the first delivery already did everything;
  * this one contributes nothing, by construction, not by recovery.
  */
-export async function consumeStripeContextEvent(
+export async function consumeContextEvent(
   db: Db['db'],
   input: ConsumeContextEventInput,
 ): Promise<ConsumeContextEventResult> {
@@ -85,6 +92,9 @@ export async function consumeStripeContextEvent(
       const result = applyEvent(aggregate, {
         event: input.event,
         effectiveAt: input.effectiveAt,
+        // exactOptionalPropertyTypes: omit the key entirely when absent,
+        // rather than passing periodEnd: undefined explicitly.
+        ...(input.periodEnd !== undefined && { periodEnd: input.periodEnd }),
       });
 
       // Narrow BEFORE writing: ApplyEventDisposition includes 'invalid' and
