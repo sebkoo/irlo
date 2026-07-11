@@ -3,7 +3,11 @@ import { Writable } from 'node:stream';
 export class MemoryLogStream extends Writable {
   private readonly lines: string[] = [];
 
-  override _write(chunk: Buffer | string, _encoding: BufferEncoding, callback: (error?: Error | null) => void): void {
+  override _write(
+    chunk: Buffer | string,
+    _encoding: BufferEncoding,
+    callback: (error?: Error | null) => void,
+  ): void {
     this.lines.push(chunk.toString());
     callback();
   }
