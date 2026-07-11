@@ -19,9 +19,11 @@ in-person activities — run crews, gallery nights, pickup games.*
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 *The codecov % above is canary-surface coverage, not proof of a tested system:
-Stage 1's `server/src` is a Fastify app factory with one `/health` endpoint
-([ADR-0003](docs/adr/0003-backend-platform.md)), covered by a supertest
-integration test. Real coverage grows endpoint-by-endpoint from here — see
+Stage 1's `server/src` is a Fastify app factory with one `/health` endpoint,
+zod-parsed env config, and structured logging
+([ADR-0003](docs/adr/0003-backend-platform.md)), covered by supertest
+integration tests plus unit/contract tests for the env config. Real coverage
+grows endpoint-by-endpoint from here — see
 [`NEXT_STEPS.md`](NEXT_STEPS.md).*
 
 </div>
@@ -56,8 +58,9 @@ integration test. Real coverage grows endpoint-by-endpoint from here — see
 
 Today the repo is **Stage 1 in progress**: Stage 0's verified name,
 canary-tested monorepo, CI, AI-native engineering harness, and full design
-record, plus a live Fastify `/health` endpoint as the server foundation comes
-online. Every feature above is planned in [`NEXT_STEPS.md`](NEXT_STEPS.md) —
+record, plus a live Fastify `/health` endpoint, typed env config, and
+structured logging as the server foundation comes online. Every feature above
+is planned in [`NEXT_STEPS.md`](NEXT_STEPS.md) —
 nothing is quietly half-built.
 
 ## Why Irlo
@@ -147,8 +150,9 @@ design-stage — see the ADR trail.*
 - **CI matrix:** Ubuntu (typecheck · lint · format · Vitest+coverage) and
   macOS 26 (XcodeGen → XCTest/XCUITest on a dynamically-resolved simulator),
   Codecov flags `server`/`ios`.
-- **Observability as a deliverable:** pino structured logs + OpenTelemetry from
-  the first endpoint ([ADR-0003](docs/adr/0003-backend-platform.md), planned).
+- **Observability as a deliverable:** pino structured logs live on the
+  `/health` endpoint onward; OpenTelemetry traces next
+  ([ADR-0003](docs/adr/0003-backend-platform.md), planned).
 - **Atomic, explained commits:** Conventional Commits 1.0; bodies explain *why*;
   history reads as a plan, not an accident — inspect `git log`.
 
@@ -166,8 +170,8 @@ the credibility.
 
 | Horizon | Work |
 |---|---|
-| **Now** (done) | Stage 0: verified name · toolchain · canary-tested monorepo · CI · AI harness · full design record (ADR 0001–0008). Stage 1 underway: Fastify `/health` triplet live |
-| **Next** | Server foundation online: env contract, pino+OTel, Docker dev env, Drizzle + Testcontainers → then entitlements & admission (US-01/02) |
+| **Now** (done) | Stage 0: verified name · toolchain · canary-tested monorepo · CI · AI harness · full design record (ADR 0001–0008). Stage 1 underway: Fastify `/health` triplet, zod-parsed env config, pino structured logging live |
+| **Next** | Server foundation online: OpenTelemetry bootstrap, Docker dev env, Drizzle + Testcontainers → then entitlements & admission (US-01/02) |
 | **Later** | Stripe rail → App Store rail → reconciliation → Deck feed → chat gateway → iOS flows → web checkout → RN screen → pgvector ranking |
 
 Full sequence with commit-level granularity: [`NEXT_STEPS.md`](NEXT_STEPS.md).

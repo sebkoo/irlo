@@ -1,8 +1,9 @@
 # NEXT_STEPS — the Stage 1+ plan of record
 
 Stage 0 (C01–C12) is complete: verified name, toolchain, canary-tested monorepo,
-CI, AI harness, docs. Stage 1 is underway: C13–C15 (`/health` endpoint triplet)
-is done. **Nothing below C13–C15 is implemented.** Work proceeds backend-first
+CI, AI harness, docs. Stage 1 is underway: C13–C15 (`/health` endpoint triplet),
+C16 (zod-parsed runtime env config), and C17 (pino structured logging) are
+done. **Nothing below C17 is implemented.** Work proceeds backend-first
 in the order that maximizes JD evidence: entitlements & admission → Stripe rail
 → App Store rail → reconciliation → Deck feed → chat → iOS client flows → web
 checkout → RN screen → AI ranking.
@@ -18,8 +19,9 @@ endpoints; `/adr-new` when a decision is missing.
 | # | Work | Notes |
 |---|---|---|
 | C13–C15 | `/health` endpoint triplet on Fastify app factory (done) | failing contract test → typed route → app-factory refactor; first supertest |
-| C16 | zod-parsed env config (12-factor) | `.env.example` becomes the tested contract |
-| C17–C18 | pino logging + OpenTelemetry bootstrap | request IDs, trace context; log schema doc |
+| C16 | zod-parsed env config (12-factor) (done) | `.env.example` becomes the tested contract |
+| C17 | pino structured logging (done) | request IDs; log schema doc |
+| C18 | OpenTelemetry bootstrap | trace context (traceId/spanId) |
 | C19 | docker-compose dev env (Postgres + Redis) | requires `cask docker` (deferred Brewfile entry) |
 | C20–C22 | Drizzle + migrations + Testcontainers repository triplet | first table: members |
 
@@ -75,7 +77,7 @@ endpoints; `/adr-new` when a decision is missing.
 
 ## Deferred / parked items
 
-- `brew "asciinema"`, `cask "docker"` — uncomment in Brewfile when Stage 1 starts.
+- `brew "asciinema"`, `cask "docker"` — uncomment in Brewfile when C19 (docker-compose) lands.
 - README CI/coverage badges — add only after the first green CI run (may already
   be done post-push; check).
 - Manual KIPRIS trademark session before any commercial use (`docs/naming/verification.md` #12).
