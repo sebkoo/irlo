@@ -20,6 +20,9 @@ export function createMembersRepository(db: Db['db']): MembersRepository {
   return {
     async create() {
       const [row] = await db.insert(members).values({}).returning();
+      /* c8 ignore next -- an insert with no returning-conflict clause always
+       * returns exactly one row; this guard only satisfies TS's array type,
+       * forcing it via a mock would test the mock, not this code. */
       if (!row) throw new Error('member insert returned no row');
       return row;
     },
