@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { applyEvent, type SubscriptionAggregateWithContext } from '../../src/domain/subscription-transition.js';
+import {
+  applyEvent,
+  type SubscriptionAggregateWithContext,
+} from '../../src/domain/subscription-transition.js';
 
 const T1 = new Date('2026-01-01T00:00:00Z');
 const T2 = new Date('2026-01-15T00:00:00Z');
@@ -76,6 +79,27 @@ describe('I5a — stale-but-economic events (ADR-0009 §3f)', () => {
     expect(result.aggregate.highWater).toEqual(T2);
   });
 
+  it('a non-stale self-loop (active --renewed--> active) reports stateChanged: false, still applied', () => {
+    const aggregate: SubscriptionAggregateWithContext = {
+      state: 'active',
+      willRenew: true,
+      currentPeriodEnd: T1,
+      highWater: T1,
+    };
+
+    const result = applyEvent(aggregate, {
+      event: { type: 'renewed' },
+      effectiveAt: T2,
+      periodEnd: T2,
+    });
+
+    expect(result.aggregate.state).toBe('active');
+    expect(result.stateChanged).toBe(false);
+    expect(result.disposition).toBe('applied');
+    expect(result.aggregate.currentPeriodEnd).toEqual(T2);
+    expect(result.aggregate.highWater).toEqual(T2);
+  });
+
   it('the first event ever applied (highWater null) is never considered stale', () => {
     const aggregate: SubscriptionAggregateWithContext = {
       state: 'trial',
@@ -111,7 +135,7 @@ describe('I5a — stale-but-economic events (ADR-0009 §3f)', () => {
     expect(result.aggregate.highWater).toEqual(T2);
   });
 
-  it('an invalid (off-graph) event reports its typed error and leaves state and highWater untouched', () => {
+  it('an invalid (off-graph) event reports its typed error and leaves state, period context, and highWater untouched', () => {
     const aggregate: SubscriptionAggregateWithContext = {
       state: 'trial',
       willRenew: true,
@@ -119,11 +143,18 @@ describe('I5a — stale-but-economic events (ADR-0009 §3f)', () => {
       highWater: T1,
     };
 
-    const result = applyEvent(aggregate, { event: { type: 'grace_exhausted' }, effectiveAt: T2 });
+    // periodEnd included deliberately: an off-graph event must not
+    // contribute period context either, even though it carries one.
+    const result = applyEvent(aggregate, {
+      event: { type: 'grace_exhausted' },
+      effectiveAt: T2,
+      periodEnd: T3,
+    });
 
     expect(result.aggregate.state).toBe('trial');
     expect(result.stateChanged).toBe(false);
     expect(result.disposition).toBe('invalid');
+    expect(result.aggregate.currentPeriodEnd).toEqual(T1);
     expect(result.error).toEqual({
       code: 'invalid_transition',
       state: 'trial',

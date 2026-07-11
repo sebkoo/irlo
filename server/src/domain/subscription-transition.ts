@@ -85,3 +85,102 @@ export function transition(
       return invalid(state, event.type);
   }
 }
+
+/**
+ * ADR-0009 idempotency layer 3 (I5/I5a) — the monotonic highWater guard,
+ * wrapping C24's transition() without modifying it. currentPeriodEnd and
+ * highWater live here, on the persisted superset of the pure core's
+ * aggregate, so transition()'s signature stays untouched.
+ */
+export interface SubscriptionAggregateWithContext extends SubscriptionAggregate {
+  currentPeriodEnd: Date | null;
+  highWater: Date | null;
+}
+
+/**
+ * Staleness here is effectiveAt-only (`effectiveAt < highWater`), so two
+ * events sharing the same effectiveAt are both treated as non-stale.
+ * ADR-0009's full ordering key is (effectiveAt, inbox_seq) — inbox_seq is
+ * DB-assigned by the inbox repository, an executor-level concern this pure
+ * function doesn't have access to. Same-effectiveAt tiebreaking is the
+ * executor's job, not modeled here.
+ */
+export interface TimedSubscriptionEvent {
+  event: SubscriptionEvent;
+  effectiveAt: Date;
+  /** Present only for events that carry a new period end (e.g. renewed). */
+  periodEnd?: Date;
+}
+
+/**
+ * 'applied' | 'superseded' | 'no_op_terminal' map directly onto
+ * `payment_events.disposition` (C21's schema enum). 'invalid' does NOT — the
+ * schema enum has no slot for an off-graph event, deliberately: a domain
+ * error isn't an idempotency outcome. The executor must not write an
+ * 'invalid' result as a disposition value; route it to alerting/operator
+ * review instead (mechanism TBD at executor-wiring time — this is the
+ * documented seam, not a silent gap).
+ */
+export type ApplyEventDisposition = 'applied' | 'superseded' | 'no_op_terminal' | 'invalid';
+
+export interface ApplyEventResult {
+  aggregate: SubscriptionAggregateWithContext;
+  stateChanged: boolean;
+  disposition: ApplyEventDisposition;
+  error?: InvalidTransitionError;
+}
+
+function mergePeriodEnd(current: Date | null, incoming: Date | undefined): Date | null {
+  if (incoming === undefined) return current;
+  if (current === null || incoming > current) return incoming;
+  return current;
+}
+
+export function applyEvent(
+  aggregate: SubscriptionAggregateWithContext,
+  timed: TimedSubscriptionEvent,
+): ApplyEventResult {
+  const { event, effectiveAt, periodEnd } = timed;
+
+  const stale = aggregate.highWater !== null && effectiveAt < aggregate.highWater;
+  if (stale) {
+    // I5a: period context still merges monotonically for a stale-but-economic
+    // event — an older event can never shrink a period, but its period fact
+    // still counts if it's newer than what's on file. The ledger append this
+    // event may carry is the caller's concern (outside this pure function);
+    // here, only the state transition is suppressed. highWater itself is
+    // untouched, since it already reflects a later effectiveAt than this one.
+    return {
+      aggregate: {
+        ...aggregate,
+        currentPeriodEnd: mergePeriodEnd(aggregate.currentPeriodEnd, periodEnd),
+      },
+      stateChanged: false,
+      disposition: 'superseded',
+    };
+  }
+
+  const result = transition(aggregate, event);
+
+  if (!result.ok) {
+    // An off-graph event contributes no period context and doesn't advance
+    // highWater — it represents no successfully-applied fact, economic or
+    // otherwise, so nothing about it is trusted.
+    return {
+      aggregate,
+      stateChanged: false,
+      disposition: 'invalid',
+      error: result.error,
+    };
+  }
+
+  return {
+    aggregate: {
+      ...result.aggregate,
+      currentPeriodEnd: mergePeriodEnd(aggregate.currentPeriodEnd, periodEnd),
+      highWater: effectiveAt,
+    },
+    stateChanged: !result.noop && result.aggregate.state !== aggregate.state,
+    disposition: result.noop ? 'no_op_terminal' : 'applied',
+  };
+}
