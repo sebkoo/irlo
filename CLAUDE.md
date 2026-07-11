@@ -109,6 +109,10 @@ from a session where the file just changed.
   then ask — never swap a plan-recorded fact silently.
 - Pause for review at each `NEXT_STEPS.md` milestone boundary with `git log --oneline` since
   the last push, plus a test/coverage summary.
+- **Identity scan before every push:** `git log --format='%an %ae' <last-push-sha>..HEAD | sort -u`
+  must return exactly one line, `Ben Koo seb.m.koo@gmail.com` (this repo's identity is set
+  locally; the global git config is a different identity that must never leak into this
+  history). Any other line — stop and ask before pushing.
 
 ## Definition of done
 

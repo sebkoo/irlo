@@ -100,6 +100,20 @@ frontmatter) change, and have the subagent self-report its running
 model/effort at the end of its own output before trusting a result as
 evidence the new frontmatter took effect.
 
+**Operational note (2026-07): two review tiers, not one.** The first
+milestone-boundary sweep before a push (§Checkpoints) caught doc drift that
+three prior per-triplet `code-reviewer` passes had each individually missed:
+a docs-truthfulness fix synced README/NEXT_STEPS to "only C13–C15 done," and
+two later triplets (C16, C17) each landed real implementation without
+re-syncing that same status text — every triplet's own diff looked clean in
+isolation, so no single review ever saw the aggregate contradiction. Per-
+triplet review catches code correctness within one diff; only a full-batch
+sweep over everything since the last push catches cross-commit drift where
+an earlier commit's claim goes stale under a later commit it never saw. The
+two tiers are complementary, not redundant — skipping the milestone sweep
+because the triplets were "already reviewed" is exactly the gap that let
+this through.
+
 ## Velocity notes
 
 Cycle time per story (idea → merged with evidence) gets recorded here from
