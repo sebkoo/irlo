@@ -1,3 +1,10 @@
 packages:
   - server
   - packages/*
+
+# puppeteer's postinstall downloads the Chromium binary @mermaid-js/mermaid-cli
+# renders with — needed for it to function at all. Scoped to exactly this one
+# package; the other ignored-by-default build scripts (esbuild, protobufjs,
+# ssh2, cpu-features — transitive, unused) stay blocked.
+onlyBuiltDependencies:
+  - puppeteer

@@ -88,24 +88,24 @@ behind that promise are engineered.
 
 ```mermaid
 flowchart TB
-  subgraph clients [Clients]
-    IOS["iOS app (Swift 6)\nUIKit shell + SwiftUI\nRxSwift Deck · Combine new modules\nCoreData · MapKit · StoreKit 2"]
-    WEB["Web checkout (planned)\nStripe Checkout"]
+  subgraph clients ["Clients"]
+    IOS["iOS app (Swift 6)<br/>UIKit shell + SwiftUI<br/>RxSwift Deck · Combine new modules<br/>CoreData · MapKit · StoreKit 2"]
+    WEB["Web checkout (planned)<br/>Stripe Checkout"]
     RN["RN Events screen (planned)"]
   end
 
-  subgraph backend [Backend — Node 24 · TypeScript strict · Fastify]
-    API[REST API\nzod contracts]
-    WS[WebSocket gateway\nrooms · presence]
-    ENT[Entitlement service\none source of truth]
-    ADM[Admission state machine\napply → waitlist → accept]
-    PAY[Webhook consumers\nStoreKit 2 · Stripe\nidempotent · at-least-once]
-    JOBS[BullMQ jobs\nreconciliation · notifications]
+  subgraph backend ["Backend — Node 24 · TypeScript strict · Fastify"]
+    API["REST API<br/>zod contracts"]
+    WS["WebSocket gateway<br/>rooms · presence"]
+    ENT["Entitlement service<br/>one source of truth"]
+    ADM["Admission state machine<br/>apply → waitlist → accept"]
+    PAY["Webhook consumers<br/>StoreKit 2 · Stripe<br/>idempotent · at-least-once"]
+    JOBS["BullMQ jobs<br/>reconciliation · notifications"]
   end
 
-  subgraph data [Data]
-    PG[(Postgres\n+ append-only ledger)]
-    RD[(Redis\npresence · queues · rate limits)]
+  subgraph data ["Data"]
+    PG[("Postgres<br/>+ append-only ledger")]
+    RD[("Redis<br/>presence · queues · rate limits")]
   end
 
   IOS --> API

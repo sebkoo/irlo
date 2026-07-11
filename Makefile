@@ -34,6 +34,7 @@ test-ci: ## Exact commands CI runs for server/contracts — run before every pus
 	pnpm -r lint
 	pnpm -r format
 	pnpm -r test:coverage
+	node scripts/validate-mermaid.mjs
 
 test-ios: ## iOS unit + UI canaries (XCTest/XCUITest)
 	cd $(IOS_DIR) && xcodegen generate && xcodebuild \
@@ -45,6 +46,7 @@ test-ios: ## iOS unit + UI canaries (XCTest/XCUITest)
 lint: ## Lint all workspaces
 	pnpm -r lint
 	cd $(IOS_DIR) && swiftlint
+	node scripts/validate-mermaid.mjs
 
 media: ## Capture evidence media (pipeline lands in Stage 1+)
 	@echo "make media: evidence pipeline arrives with Stage 1+ (see docs/media/README.md)"

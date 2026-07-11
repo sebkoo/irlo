@@ -35,18 +35,18 @@ planned):
 
 ```mermaid
 flowchart LR
-  AS[App Store Server\nNotifications V2 JWS] --> V1[JWS verifier]
-  SK[StoreKit 2 client\ntransaction JWS] --> V1
-  ST[Stripe webhooks\nsigned events] --> V2[Signature verifier]
-  V1 --> N[Normalizer → PaymentEvent]
+  AS["App Store Server<br/>Notifications V2 JWS"] --> V1["JWS verifier"]
+  SK["StoreKit 2 client<br/>transaction JWS"] --> V1
+  ST["Stripe webhooks<br/>signed events"] --> V2["Signature verifier"]
+  V1 --> N["Normalizer → PaymentEvent"]
   V2 --> N
-  N --> Q[(BullMQ queue)]
-  Q --> C[Idempotent consumer\ndedupe: provider event ID]
-  C --> L[(Append-only ledger)]
-  C --> SM[Subscription state machine]
-  SM --> E[Entitlement service]
-  L --> R[Nightly reconciliation]
-  E --> API[Capability checks\nADR-0005]
+  N --> Q[("BullMQ queue")]
+  Q --> C["Idempotent consumer<br/>dedupe: provider event ID"]
+  C --> L[("Append-only ledger")]
+  C --> SM["Subscription state machine"]
+  SM --> E["Entitlement service"]
+  L --> R["Nightly reconciliation"]
+  E --> API["Capability checks<br/>ADR-0005"]
 ```
 
 - **Normalization:** both rails reduce to one `PaymentEvent` contract

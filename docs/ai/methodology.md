@@ -29,16 +29,16 @@ AI tools" and "productivity-obsessed" — with artifacts, not adjectives.
 
 ```mermaid
 flowchart LR
-  P[Plan\nPlan Mode, top model] --> R[Red\nfailing named test]
-  R --> G[Green\nminimum implementation]
-  G --> F[Refactor\ntests stay green]
-  F --> E[Evidence\n/capture-media]
-  E --> REV[Subagent review\ncode-reviewer]
-  REV --> C[Atomic commit\nConventional Commits]
-  C --> PR[PR + template\ntests + evidence]
-  PR --> CI[CI gates\ncoverage, lint]
-  CI --> M[Merge to main\ntrunk-based]
-  M --> REL[Weekly tagged release\n/release-notes]
+  P["Plan<br/>Plan Mode, top model"] --> R["Red<br/>failing named test"]
+  R --> G["Green<br/>minimum implementation"]
+  G --> F["Refactor<br/>tests stay green"]
+  F --> E["Evidence<br/>/capture-media"]
+  E --> REV["Subagent review<br/>code-reviewer"]
+  REV --> C["Atomic commit<br/>Conventional Commits"]
+  C --> PR["PR + template<br/>tests + evidence"]
+  PR --> CI["CI gates<br/>coverage, lint"]
+  CI --> M["Merge to main<br/>trunk-based"]
+  M --> REL["Weekly tagged release<br/>/release-notes"]
   REL --> P
 ```
 

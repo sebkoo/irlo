@@ -27,7 +27,7 @@
 sequenceDiagram
     participant Client
     participant API
-    Client->>API: <replace with the real flow, or delete if no state/flow change>
+    Client->>API: replace with the real flow, or delete this block if no state/flow change
 ```
 
 ## Contracts

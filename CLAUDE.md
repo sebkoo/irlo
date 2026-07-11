@@ -115,9 +115,15 @@ from a session where the file just changed.
 - Pause for review at each `NEXT_STEPS.md` milestone boundary with `git log --oneline` since
   the last push, plus a test/coverage summary.
 - **`make test-ci` before every push:** runs the exact commands CI runs (`pnpm -r typecheck`,
-  `lint`, `format`, `test:coverage`) — not `make test`/`pnpm -r test`, which skips coverage and
-  can pass locally while CI's coverage-gate check fails. Discovered 2026-07: a push landed on a
-  green `pnpm -r test` that then failed CI's `test:coverage` on an uncovered branch.
+  `lint`, `format`, `test:coverage`, `node scripts/validate-mermaid.mjs`) — not
+  `make test`/`pnpm -r test`, which skips coverage and can pass locally while CI's
+  coverage-gate check fails. Discovered 2026-07: a push landed on a green `pnpm -r test`
+  that then failed CI's `test:coverage` on an uncovered branch. Discovered again 2026-07:
+  a mermaid diagram broke GitHub's README rendering with no local signal at all — per-commit
+  review can't see GitHub-side rendering, so `make lint`/`make test-ci` now render every
+  fenced `mermaid` block with `mmdc` as a mechanical gate. Note this is a syntax guard, not
+  a GitHub-render guarantee: `mmdc` rendered the exact block that broke GitHub, a
+  version/engine mismatch the gate can't fully close — still the best check available.
 - **Identity scan before every push:** `git log --format='%an %ae' <last-push-sha>..HEAD | sort -u`
   must return exactly one line, `Ben Koo seb.m.koo@gmail.com` (this repo's identity is set
   locally; the global git config is a different identity that must never leak into this

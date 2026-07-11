@@ -30,6 +30,13 @@ jobs:
       - run: pnpm -r format
       - run: pnpm -r test:coverage
 
+      # Renders every fenced ```mermaid block (README + docs/) with mmdc — a
+      # syntax guard, not a GitHub-render guarantee (mmdc's mermaid.js version
+      # didn't reproduce the crash this gate exists to catch; see
+      # scripts/validate-mermaid.mjs). Best mechanical gate available since
+      # per-commit review can't see GitHub-side rendering either way.
+      - run: node scripts/validate-mermaid.mjs
+
       - name: Upload coverage (flag server)
         uses: codecov/codecov-action@v7
         with:
