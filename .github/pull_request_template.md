@@ -24,6 +24,11 @@
 ## Docs
 
 - [ ] Docs updated where this change demands it (ADR, README, user stories, runbook) — or n/a
+- [ ] If this PR touches a mermaid diagram or other GitHub-rendered embed: visually
+      verified rendering on live GitHub **in a clean profile/incognito with browser
+      extensions disabled** (see `docs/runbook.md` #Diagnosing GitHub rendering
+      defects — extension interference reproduces the exact same "still broken"
+      symptom as a real content defect) — or n/a
 
 ## Commits
 

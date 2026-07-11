@@ -57,6 +57,37 @@ Docker runtime** here instead (`brew install colima docker docker-compose`,
   documents the *app's* runtime contract — Testcontainers reads Docker's own
   config, not the app's.
 
+## Diagnosing GitHub rendering defects (mermaid, images, embeds)
+
+**Before touching repo content, verify the failure in a clean profile with browser
+extensions disabled (or a private/incognito window) — confirmed 2026-07-11:**
+a README mermaid diagram appeared to still fail after a content fix had already
+landed and been independently verified rendering correctly. Root cause: a
+browser extension (ad/privacy/tracker blocker) was blocking
+`viewscreen.githubusercontent.com` — the separate origin GitHub's README mermaid
+renderer lazily fetches from once the diagram scrolls into view. That block
+reproduces the *exact same visual symptom* as a genuine unrendered-diagram
+defect (blank space where the diagram should be), with no error text and no
+console error visible to a quick look — extension interference and a real
+content bug are indistinguishable without this check. The same applies to any
+GitHub-rendered embed that loads from a separate origin (mermaid, and
+potentially others as the README/docs use more embeds), not mermaid alone.
+
+Diagnostic order for a reported "GitHub won't render X" symptom:
+1. Reproduce in a clean profile/incognito with extensions disabled first —
+   cheapest check, rules out the most common false positive.
+2. Only if it still fails clean: isolate content vs. delivery — GitHub's
+   mermaid rendering is lazy (`IntersectionObserver`-gated fetch to
+   `viewscreen.githubusercontent.com`, not inline client-side JS), so an
+   automated check (headless browser) must explicitly scroll the target
+   element into view and poll for the async result — a fixed wait without a
+   scroll trigger produces the same false "still broken" signal a human
+   glancing too quickly would. A secret gist with the same content isolates
+   content-only rendering (no README-page scroll-timing variables) as a fast
+   first substep.
+3. Only once a clean-profile, properly-triggered check still fails is it a
+   real content defect worth bisecting.
+
 ## Escalation
 
 Reality: **solo maintainer**. There is no rotation; "escalation" means:
