@@ -177,6 +177,74 @@ function mergePeriodEnd(current: Date | null, incoming: Date | undefined): Date 
   return current;
 }
 
+/**
+ * ADR-0009 §3b's `[*] --> trial|active` entry transitions — a purchase (or
+ * Apple RESUBSCRIBE) event. Deliberately outside `SubscriptionEvent`: every
+ * other event transitions an *existing* aggregate; a purchase decides
+ * whether one exists to transition at all. `latestGeneration` is that
+ * generation's aggregate — the highest-numbered one on record for this
+ * (provider, providerSubscriptionId) — or null if none has ever been
+ * created (this member's first purchase on this subscription id).
+ */
+export interface PurchaseEvent {
+  type: 'purchased';
+  /** Trial entry vs immediate active entry — ADR-0009 §3b's `[offer present]` guard. */
+  offerPresent: boolean;
+}
+
+export type PurchaseDisposition = 'generation_created' | 'no_op_live';
+
+export interface PurchaseResult {
+  aggregate: SubscriptionAggregateWithContext;
+  isNewGeneration: boolean;
+  disposition: PurchaseDisposition;
+}
+
+function createGeneration(
+  event: PurchaseEvent,
+  timed: { effectiveAt: Date; periodEnd?: Date; productId: string },
+): SubscriptionAggregateWithContext {
+  return {
+    state: event.offerPresent ? 'trial' : 'active',
+    willRenew: true,
+    productId: timed.productId,
+    currentPeriodEnd: mergePeriodEnd(null, timed.periodEnd),
+    highWater: timed.effectiveAt,
+  };
+}
+
+/**
+ * No generation on record, or the latest one is terminal (I6: expired and
+ * refunded never resurrect — continuation is always a new generation) →
+ * spawn a fresh generation at `[*]`. Otherwise the latest generation is
+ * still live, and Apple's RESUBSCRIBE on an already-live subscription (or a
+ * duplicate purchase signal) is a recorded no-op: the existing generation
+ * is returned untouched, never re-created.
+ */
+export function applyPurchase(
+  latestGeneration: SubscriptionAggregateWithContext | null,
+  event: PurchaseEvent,
+  timed: { effectiveAt: Date; periodEnd?: Date; productId: string },
+): PurchaseResult {
+  const isTerminal =
+    latestGeneration !== null &&
+    (latestGeneration.state === 'expired' || latestGeneration.state === 'refunded');
+
+  if (latestGeneration === null || isTerminal) {
+    return {
+      aggregate: createGeneration(event, timed),
+      isNewGeneration: true,
+      disposition: 'generation_created',
+    };
+  }
+
+  return {
+    aggregate: latestGeneration,
+    isNewGeneration: false,
+    disposition: 'no_op_live',
+  };
+}
+
 export function applyEvent(
   aggregate: SubscriptionAggregateWithContext,
   timed: TimedSubscriptionEvent,
