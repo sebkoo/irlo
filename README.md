@@ -9,14 +9,14 @@ in-person activities — run crews, gallery nights, pickup games.*
 
 <!-- PLACEHOLDER: logo lands with the v0.1.0 design pass (docs/media/README.md spec) -->
 
+[![CI](https://github.com/sebkoo/irlo/actions/workflows/ci.yml/badge.svg)](https://github.com/sebkoo/irlo/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/sebkoo/irlo/branch/main/graph/badge.svg)](https://codecov.io/gh/sebkoo/irlo)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A524-339933?logo=node.js&logoColor=white)](.mise.toml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.base.json)
 [![Swift](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)](apps/ios/project.yml)
 [![Platform](https://img.shields.io/badge/iOS-17%2B-black?logo=apple)](apps/ios/project.yml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
-
-<!-- CI + coverage badges appear after the first green run — truthfulness rule (CLAUDE.md) -->
 
 </div>
 
