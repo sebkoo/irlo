@@ -34,10 +34,19 @@ import type {
  *   checkout.session.completed (member↔customer linkage — the executor's
  *   job, not the reducer's).
  * - Everything else genuinely falls to `'unsupported'`.
+ *
+ * `context_event`'s `events` is an ordered, non-empty list rather than a
+ * single fact (ADR-0009 §3g): a single `customer.subscription.updated` can
+ * change both `items` and `cancel_at_period_end` at once, and both facts
+ * must reach the executor — dropping the second silently regressed the
+ * voluntary-cancel path (§3g's own "the gap"). The executor
+ * (`consumeContextEvent`) folds every fact of one envelope in a single
+ * transaction under one inbox row, preserving I4's "one Stripe event = one
+ * atomic unit" rather than splitting into per-fact inbox rows.
  */
 export type NormalizedStripeEvent =
   | { kind: 'subscription_event'; event: SubscriptionEvent }
-  | { kind: 'context_event'; event: ContextEvent }
+  | { kind: 'context_event'; events: readonly [ContextEvent, ...ContextEvent[]] }
   | { kind: 'purchase_event'; event: PurchaseEvent }
   | { kind: 'unsupported'; stripeEventType: string };
 
@@ -149,39 +158,44 @@ export function normalizeStripeEvent(event: StripeNormalizerInput): NormalizedSt
 
     case 'customer.subscription.updated': {
       const previous = event.data.previous_attributes;
+      const facts: ContextEvent[] = [];
 
-      // items checked first: if a single update touched both fields (rare
-      // — most dashboard/API actions send one focused change), plan_changed
-      // wins. Not an ADR-0009 rule, a named precedence for an edge the ADR
-      // doesn't address; locked by its own test. Revisit if this proves
-      // wrong in practice (e.g. an autorenew_set signal getting dropped
-      // during a combined update turns out to matter).
+      // items checked first — an ordering, not a precedence: both facts
+      // below are collected into one envelope (ADR-0009 §3g), so this only
+      // fixes their order in the resulting list, not which one "wins".
       if (previous?.items !== undefined) {
         const productId = event.data.object.items.data[0]?.price.id;
 
         // Defensive, not expected in practice: Stripe wouldn't fire an
-        // items-changed diff against an item-less subscription. Reporting
-        // unsupported (not a plan_changed with a fabricated productId) is
-        // the honest outcome when there's nothing to resolve it to.
-        if (productId === undefined) {
-          return { kind: 'unsupported', stripeEventType: event.type };
+        // items-changed diff against an item-less subscription. Skipping
+        // just this fact (not the whole event) is the honest outcome —
+        // fabricating a plan_changed with no resolvable productId would be
+        // wrong, but so would discarding a genuine sibling autorenew_set
+        // fact in the same envelope over an unrelated field's malformed
+        // diff (§3g).
+        if (productId !== undefined) {
+          facts.push({ type: 'plan_changed', productId });
         }
-
-        return { kind: 'context_event', event: { type: 'plan_changed', productId } };
       }
 
       if (previous?.cancel_at_period_end !== undefined) {
-        return {
-          kind: 'context_event',
-          event: {
-            type: 'autorenew_set',
-            willRenew: !event.data.object.cancel_at_period_end,
-          },
-        };
+        facts.push({
+          type: 'autorenew_set',
+          willRenew: !event.data.object.cancel_at_period_end,
+        });
       }
 
-      // Some other field changed (e.g. metadata) — not one §3b maps.
-      return { kind: 'unsupported', stripeEventType: event.type };
+      // Empty means either no field we map changed (e.g. metadata-only),
+      // or the only field(s) that did change produced no resolvable fact —
+      // §3g's own caveat: never emit an empty-list envelope.
+      if (facts.length === 0) {
+        return { kind: 'unsupported', stripeEventType: event.type };
+      }
+
+      return {
+        kind: 'context_event',
+        events: facts as [ContextEvent, ...ContextEvent[]],
+      };
     }
 
     default:

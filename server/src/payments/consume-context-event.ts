@@ -19,12 +19,26 @@ export interface ConsumeContextEventInput {
   effectiveAt: Date;
   provider: SubscriptionProvider;
   providerSubscriptionId: string;
-  event: ContextEvent;
+  /**
+   * Every context fact carried by one provider envelope (ADR-0009 §3g) —
+   * an ordered, non-empty list, not a single event. A combined Stripe
+   * `customer.subscription.updated` can change both `items` and
+   * `cancel_at_period_end` at once; both facts are folded onto the
+   * aggregate in this one transaction, under this one inbox row, rather
+   * than splitting into per-fact inbox rows (which would widen
+   * `payment_events`' UNIQUE key across every consumer function and
+   * reconciliation for a Stripe-only edge case — see §3g's trade-off
+   * table). The common case (one fact) is simply a one-element list.
+   */
+  events: readonly [ContextEvent, ...ContextEvent[]];
   /**
    * Present only for `renewal_extended` (Apple's RENEWAL_EXTENDED — Stripe
    * has no equivalent today). Without this, `renewal_extended` would report
    * 'applied' while extending nothing: its entire effect is `applyEvent`'s
-   * period-context merge, which needs a periodEnd to merge.
+   * period-context merge, which needs a periodEnd to merge. Applies to
+   * every fact in `events` that reads it — today that's only ever
+   * `renewal_extended` alone (Stripe never combines it with another fact),
+   * but nothing in this function assumes that stays true.
    */
   periodEnd?: Date;
 }
@@ -46,6 +60,20 @@ export type ConsumeContextEventResult =
  * refunded, …) and generation-spawning purchase events need ledger writes
  * and lock-a-nonexistent-row handling this function doesn't do — deferred
  * to their own follow-up executor functions.
+ *
+ * Multi-fact envelopes (ADR-0009 §3g): `input.events` may carry more than
+ * one context fact from a single provider envelope (a combined Stripe
+ * `customer.subscription.updated` touching both `items` and
+ * `cancel_at_period_end`). Every fact folds onto the aggregate in this one
+ * transaction, threaded sequentially so a later fact sees an earlier
+ * fact's field changes, under one inbox row — never split into per-fact
+ * rows. All facts of one envelope share `effectiveAt`, so `applyEvent`'s
+ * disposition is provably uniform across the fold: the first fold either
+ * applies (setting `highWater := effectiveAt`, so every later fold's
+ * `effectiveAt < highWater` staleness check also sees "not stale") or is
+ * superseded (leaving `highWater` untouched, so every later fold sees the
+ * same staleness verdict too) — the loop below simply keeps the last
+ * fold's disposition rather than asserting this invariant at runtime.
  *
  * Ordering (design-reviewed): the reducer is pure, so its disposition is
  * knowable from a READ (current subscription state) before any write — the
@@ -81,36 +109,41 @@ export async function consumeContextEvent(
         return { outcome: 'no_matching_generation' as const };
       }
 
-      const aggregate: SubscriptionAggregateWithContext = {
+      let aggregate: SubscriptionAggregateWithContext = {
         state: existing.state,
         willRenew: existing.willRenew,
         productId: existing.productId,
         currentPeriodEnd: existing.currentPeriodEnd,
         highWater: existing.highWater,
       };
+      let disposition: 'applied' | 'superseded' = 'applied';
 
-      const result = applyEvent(aggregate, {
-        event: input.event,
-        effectiveAt: input.effectiveAt,
-        // exactOptionalPropertyTypes: omit the key entirely when absent,
-        // rather than passing periodEnd: undefined explicitly.
-        ...(input.periodEnd !== undefined && { periodEnd: input.periodEnd }),
-      });
+      for (const event of input.events) {
+        const result = applyEvent(aggregate, {
+          event,
+          effectiveAt: input.effectiveAt,
+          // exactOptionalPropertyTypes: omit the key entirely when absent,
+          // rather than passing periodEnd: undefined explicitly.
+          ...(input.periodEnd !== undefined && { periodEnd: input.periodEnd }),
+        });
 
-      // Narrow BEFORE writing: ApplyEventDisposition includes 'invalid' and
-      // 'no_op_terminal', neither of which has a slot in the schema's
-      // disposition enum (the documented seam in subscription-transition.ts).
-      // Context events never actually produce either — applyEvent's
-      // isContextEvent dispatch bypasses transition() (the only source of
-      // those two values) entirely for this event family — but that's a
-      // runtime guarantee TS can't see through applyEvent's shared return
-      // type, so it's asserted here, not cast.
-      /* c8 ignore next 2 -- unreachable for a ContextEvent input (see the
-       * comment above), not merely untested. */
-      if (result.disposition !== 'applied' && result.disposition !== 'superseded') {
-        throw new Error(`unexpected disposition '${result.disposition}' for a context event`);
+        // Narrow BEFORE writing: ApplyEventDisposition includes 'invalid' and
+        // 'no_op_terminal', neither of which has a slot in the schema's
+        // disposition enum (the documented seam in subscription-transition.ts).
+        // Context events never actually produce either — applyEvent's
+        // isContextEvent dispatch bypasses transition() (the only source of
+        // those two values) entirely for this event family — but that's a
+        // runtime guarantee TS can't see through applyEvent's shared return
+        // type, so it's asserted here, not cast.
+        /* c8 ignore next 2 -- unreachable for a ContextEvent input (see the
+         * comment above), not merely untested. */
+        if (result.disposition !== 'applied' && result.disposition !== 'superseded') {
+          throw new Error(`unexpected disposition '${result.disposition}' for a context event`);
+        }
+
+        aggregate = result.aggregate;
+        disposition = result.disposition;
       }
-      const disposition = result.disposition;
 
       // Inbox insert FIRST — the disposition above came from a read, no
       // write has happened yet. A unique violation here means a duplicate
@@ -129,11 +162,11 @@ export async function consumeContextEvent(
       await tx
         .update(subscriptions)
         .set({
-          state: result.aggregate.state,
-          willRenew: result.aggregate.willRenew,
-          productId: result.aggregate.productId,
-          currentPeriodEnd: result.aggregate.currentPeriodEnd,
-          highWater: result.aggregate.highWater,
+          state: aggregate.state,
+          willRenew: aggregate.willRenew,
+          productId: aggregate.productId,
+          currentPeriodEnd: aggregate.currentPeriodEnd,
+          highWater: aggregate.highWater,
         })
         .where(eq(subscriptions.id, existing.id));
 
