@@ -9,6 +9,15 @@
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/protect-evidence.sh"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/protect-constitution-bash.sh"
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -33,11 +42,19 @@
       "Bash(git log*)",
       "Bash(git diff*)",
       "Bash(git show*)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git rebase*)",
+      "Bash(git reset*)",
       "Bash(colima status*)",
       "Bash(docker ps*)",
       "Bash(docker exec * psql *)",
       "Bash(cat *)",
-      "Bash(ls*)"
+      "Bash(ls*)",
+      "Bash(node scripts/validate-*.mjs*)",
+      "Bash(bash -n *)",
+      "Bash(which *)",
+      "Bash(* --version*)"
     ]
   }
 }
