@@ -109,16 +109,51 @@ as part of Stage 3's webhook consumer below, its first real caller.
   Stage 6's own `ranking v0 (recency/distance)` heuristic is ordinary sort logic, not a
   new domain, and needs no escalation — see Stage 6's note.
 
-**Next-session opener (2026-07-11 close):** the webhook consumer proper — signature
-verification (`Stripe.webhooks.constructEvent`) against fixture events, transactional-
-inbox wiring into the C23 repositories (`server/src/db/repositories/{ledger,inbox}.ts`),
-and dispatch into the reducer (`applyEvent`/`applyPurchase`,
-`server/src/domain/subscription-transition.ts`) via the normalizer landed this session
-(`server/src/payments/stripe/normalize-event.ts`). Before writing the executor, resolve
-the `TODO(decide)` above (combined-update dropped `autorenew_set`) — it's the kind of
-thing that's cheaper to settle before the wiring commits to a shape than to retrofit
-after. Model routing: Sonnet 5 @ high (no fresh escalation — the Stage 3 escalation
-note above already covers this).
+**Context-event executor landed (2026-07-11 close, prior session):**
+`consumeContextEvent` (`server/src/payments/consume-context-event.ts`) — the
+transactional-inbox wiring for the three context-only events (`autorenew_set`,
+`plan_changed`, `renewal_extended`), locking via `SELECT ... FOR UPDATE` on the
+existing subscription row.
+
+**Economic-event executor landed (2026-07-11 close, this session):** the three
+money-moving events — `consumePurchaseEvent` (generation-spawning `purchased`,
+`server/src/payments/consume-purchase-event.ts`), `consumeSubscriptionEconomicEvent`
+(`renewed`/`refunded` on an existing generation,
+`server/src/payments/consume-subscription-economic-event.ts`), and
+`consumeConsumableRefund` (ADR-0009 I2's negative-balance debt path,
+`server/src/payments/consume-consumable-refund.ts`). Locking design (see the two
+new functions' own doc comments for the full reasoning, reviewed and corrected
+during this session's design pass before implementation): `pg_advisory_xact_lock`
+keyed on `(provider, providerSubscriptionId)` protects the zero-row
+generation-creation race that `FOR UPDATE` structurally cannot (there's no row
+yet to lock); `SELECT ... FOR UPDATE` is *also* still taken once a row exists, so
+these two functions and the already-shipped `consumeContextEvent` all mutually
+serialize on an existing row via ordinary Postgres row-level locking — **no
+residual cross-function gap**, unlike an advisory-lock-only design would have
+left (an earlier draft of this session's design had exactly that gap; it was
+caught and closed before implementation, not discovered after). `payment_events.disposition`
+gained a fifth value, `no_op_live` (ADR-0009 "Decisions recorded" §6), for
+`consumePurchaseEvent`'s "different envelope, same ledger natural key, generation
+already live" case. Four real concurrent-Postgres-connection race tests
+(`server/test/support/deterministic-race.ts`'s `raceViaAdvisoryLock` harness for
+three of them; a documented best-effort `Promise.allSettled` for the fourth,
+`consumeConsumableRefund`, which takes no lock at all by design) prove
+exactly-once ledger effects under genuine interleaving, not just sequential
+replay. All three triplets code-reviewed (opus, xhigh) with no BLOCKING findings.
+`renewal_failed`/`grace_exhausted`/`period_expired` (state-only, no ledger fact —
+Q2: "a failed payment moves no money") remain unimplemented, left to a follow-up
+executor per the same deferral style `consume-context-event.ts` already uses.
+
+**Next-session opener:** the webhook consumer proper — signature verification
+(`Stripe.webhooks.constructEvent`) against fixture events, and dispatch from
+`normalizeStripeEvent`'s output (`server/src/payments/stripe/normalize-event.ts`)
+into the now-complete set of four executor functions above (context/purchase/
+subscription-economic/consumable-refund — the last of these has no real Stripe
+caller yet, since Stripe sells only the subscription today; it's wired for
+Stage 4's Apple rail). Before writing the endpoint, resolve the `TODO(decide)`
+above (combined-update dropped `autorenew_set`) — cheaper to settle before the
+wiring commits to a shape than to retrofit after. Model routing: Sonnet 5 @ high
+(no fresh escalation — the Stage 3 escalation note above already covers this).
 
 ## Stage 4 — App Store rail (≈C43–C49) — US-07, US-08 (server half)
 
