@@ -248,10 +248,11 @@ describe('consumeSubscriptionEconomicEvent (ADR-0009 — renewed/refunded on an 
 
   it('reports no_matching_generation for a never-seen (provider, providerSubscriptionId), with no inbox row written', async () => {
     const providerSubscriptionId = `sub_${randomUUID()}`;
+    const eventId = randomUUID();
 
     const result = await consumeSubscriptionEconomicEvent(testDb.db, {
       source: 'stripe',
-      eventId: randomUUID(),
+      eventId,
       eventType: 'invoice.paid',
       payload: {},
       effectiveAt: T2,
@@ -263,6 +264,12 @@ describe('consumeSubscriptionEconomicEvent (ADR-0009 — renewed/refunded on an 
     });
 
     expect(result).toEqual({ outcome: 'no_matching_generation' });
+
+    const inboxRows = await testDb.db
+      .select()
+      .from(paymentEvents)
+      .where(and(eq(paymentEvents.source, 'stripe'), eq(paymentEvents.eventId, eventId)));
+    expect(inboxRows).toHaveLength(0);
   });
 
   it('a redelivered (source, eventId) is reported duplicate and applies no second effect', async () => {
