@@ -10,6 +10,8 @@ import {
   type SubscriptionAggregateWithContext,
 } from '../domain/subscription-transition.js';
 
+import { subscriptionLockKey } from './subscription-lock-key.js';
+
 export interface ConsumePurchaseEventInput {
   source: string;
   eventId: string;
@@ -29,10 +31,6 @@ export interface ConsumePurchaseEventInput {
 
 export type ConsumePurchaseEventResult =
   { outcome: 'generation_created' | 'no_op_live' } | { outcome: 'duplicate' };
-
-function lockKeyFor(provider: SubscriptionProvider, providerSubscriptionId: string): string {
-  return `subscription:${provider}:${providerSubscriptionId}`;
-}
 
 function toAggregate(row: typeof subscriptions.$inferSelect): SubscriptionAggregateWithContext {
   return {
@@ -96,7 +94,7 @@ export async function consumePurchaseEvent(
 ): Promise<ConsumePurchaseEventResult> {
   try {
     return await db.transaction(async (tx) => {
-      const lockKey = lockKeyFor(input.provider, input.providerSubscriptionId);
+      const lockKey = subscriptionLockKey(input.provider, input.providerSubscriptionId);
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`);
 
       const [latest] = await tx

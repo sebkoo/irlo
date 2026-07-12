@@ -9,6 +9,7 @@ import { createMembersRepository } from '../src/db/repositories/members.js';
 import { createSubscriptionsRepository } from '../src/db/repositories/subscriptions.js';
 import { ledgerEntries, paymentEvents, subscriptions } from '../src/db/schema/index.js';
 import { consumePurchaseEvent } from '../src/payments/consume-purchase-event.js';
+import { subscriptionLockKey } from '../src/payments/subscription-lock-key.js';
 
 import { raceViaAdvisoryLock } from './support/deterministic-race.js';
 import { startTestDb, stopTestDb, type TestDb } from './support/testcontainers-postgres.js';
@@ -297,7 +298,7 @@ describe('consumePurchaseEvent (ADR-0009 — generation-spawning purchase, I2/I3
     const providerSubscriptionId = `sub_${randomUUID()}`;
     const eventId = randomUUID();
     const invoiceId = `in_${randomUUID()}`;
-    const lockKey = `subscription:stripe:${providerSubscriptionId}`;
+    const lockKey = subscriptionLockKey('stripe', providerSubscriptionId);
 
     const racePool = new Pool({ connectionString: testDb.container.getConnectionUri(), max: 3 });
     const raceDb = drizzle(racePool);
@@ -352,7 +353,7 @@ describe('consumePurchaseEvent (ADR-0009 — generation-spawning purchase, I2/I3
     const invoiceId = `in_${randomUUID()}`;
     const eventIdA = randomUUID();
     const eventIdB = randomUUID();
-    const lockKey = `subscription:stripe:${providerSubscriptionId}`;
+    const lockKey = subscriptionLockKey('stripe', providerSubscriptionId);
 
     const racePool = new Pool({ connectionString: testDb.container.getConnectionUri(), max: 3 });
     const raceDb = drizzle(racePool);
