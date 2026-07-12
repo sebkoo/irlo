@@ -144,16 +144,22 @@ replay. All three triplets code-reviewed (opus, xhigh) with no BLOCKING findings
 Q2: "a failed payment moves no money") remain unimplemented, left to a follow-up
 executor per the same deferral style `consume-context-event.ts` already uses.
 
+**Multi-fact envelope + delivery-semantics addenda settled (2026-07-11):** the two gaps that
+were blocking the webhook route — the combined-update `autorenew_set` drop and the missing
+disposition→HTTP mapping — are now [ADR-0009 §3g and §3h](docs/adr/0009-entitlement-domain-model.md#3g-multi-fact-envelopes-addendum-decided-2026-07-11--code-reviewer-approved),
+both code-reviewer approved. See the resolved `TODO(decide)` above for the §3g summary.
+
 **Next-session opener:** the webhook consumer proper — signature verification
 (`Stripe.webhooks.constructEvent`) against fixture events, and dispatch from
 `normalizeStripeEvent`'s output (`server/src/payments/stripe/normalize-event.ts`)
 into the now-complete set of four executor functions above (context/purchase/
 subscription-economic/consumable-refund — the last of these has no real Stripe
 caller yet, since Stripe sells only the subscription today; it's wired for
-Stage 4's Apple rail). Before writing the endpoint, resolve the `TODO(decide)`
-above (combined-update dropped `autorenew_set`) — cheaper to settle before the
-wiring commits to a shape than to retrofit after. Model routing: Sonnet 5 @ high
-(no fresh escalation — the Stage 3 escalation note above already covers this).
+Stage 4's Apple rail), plus `normalizeStripeEvent`'s widening to emit a multi-fact
+context-event envelope (§3g) and `consumeContextEvent`'s widening to fold it in one
+transaction/one inbox row. Route HTTP status mapping per §3h; doc comment cites §3h,
+not §3e. Model routing: Sonnet 5 @ high (no fresh escalation — the Stage 3 escalation
+note above already covers this).
 
 ## Stage 4 — App Store rail (≈C43–C49) — US-07, US-08 (server half)
 
@@ -238,26 +244,19 @@ pgvector Deck re-ranking MVP mapped to the five-layer AI stack
   `period_expired` (trial→expired, forgoing dunning) by design, or is §3b missing an
   edge? Found in code-reviewer's C24 review (2026-07-11) — not a bug in C24, which
   correctly implements the ADR as specified.
-- `TODO(decide)`: `normalizeStripeEvent`'s `customer.subscription.updated` case
-  (`server/src/payments/stripe/normalize-event.ts`) checks `previous_attributes.items`
-  before `previous_attributes.cancel_at_period_end`, so a single Stripe update that
-  changes both fields in the same event normalizes to `plan_changed` only — the
-  `autorenew_set` signal is silently dropped, not queued or merged. Real entitlement
-  consequence: if that drop leaves the reducer's in-memory `willRenew` stale (says
-  renewing when the member actually set cancel-at-period-end), `active +
-  period_expired + !willRenew → expired` (the voluntary-cancel path) won't fire on
-  schedule. Rare (needs one Stripe API call touching both fields at once — most
-  dashboard/API actions send a single focused change) but real. Resolve at
-  consumer-wiring time (Stage 3, next session): either widen `NormalizedStripeEvent`
-  so `customer.subscription.updated` can emit both context events, or have the
-  consumer re-derive `willRenew` from the current `object.cancel_at_period_end` on
-  every subscription.updated regardless of which field triggered the diff (simpler,
-  makes the diff redundant for autorenew_set specifically). Precedence identified and
-  locked by its own test while implementing; flagged as requiring plan-of-record
-  tracking in the code-reviewer's Stripe-normalizer review (2026-07-11) — not a bug
-  in the normalizer, which correctly implements the one-event-in/one-event-out
-  shape as scoped; a genuine gap
-  in that shape for this specific combined-update edge.
+- ~~`TODO(decide)`: `normalizeStripeEvent`'s `customer.subscription.updated` combined-update
+  edge (dropped `autorenew_set` when `items` also changed in the same envelope)~~ —
+  **resolved 2026-07-11**, [ADR-0009 §3g](docs/adr/0009-entitlement-domain-model.md#3g-multi-fact-envelopes-addendum-decided-2026-07-11--code-reviewer-approved)
+  (code-reviewer approved, Opus 4.8/xhigh): the normalizer will emit an ordered, non-empty
+  list of context facts for a combined update; the executor folds all facts of one envelope
+  in a single transaction under one inbox row (decided over a facet-suffixed-inbox-key
+  alternative on atomicity grounds — one Stripe event must stay one atomic unit). Also see
+  [ADR-0009 §3h](docs/adr/0009-entitlement-domain-model.md#3h-delivery-semantics--stripe-webhook-http-response-mapping-addendum-2026-07-11),
+  added the same session: the disposition→HTTP status mapping for the webhook route
+  (2xx/400/5xx + the `invalid`-transition and `no_matching_generation` edge cases), since no
+  section previously specified this (§3e is dual-rail reconciliation authority, not HTTP
+  transport — a prior read of the ADR conflated the two). Both addenda are settled; nothing
+  blocks starting the route.
 - README CI/coverage badges — add only after the first green CI run (may already
   be done post-push; check).
 - Manual KIPRIS trademark session before any commercial use (`docs/naming/verification.md` #12).

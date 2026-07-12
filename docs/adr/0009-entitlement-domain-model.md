@@ -259,6 +259,72 @@ carries a client-minted UUID idempotency key → layer 2.
 - **I14** Single write path: webhooks, client submissions, and reconciliation corrections
   all mutate state only through the one transition executor.
 
+### 3g. Multi-fact envelopes (addendum, decided 2026-07-11 — code-reviewer approved)
+
+**The gap.** `normalizeStripeEvent`'s `customer.subscription.updated` case checks
+`previous_attributes.items` before `previous_attributes.cancel_at_period_end`, so a single
+Stripe update touching both fields at once (rare — most dashboard/API actions send one
+focused change, but real) normalizes to `plan_changed` only; the `autorenew_set` signal is
+silently dropped rather than queued or merged. Left unresolved, a member who changes plan
+and disables auto-renew in the same API call keeps `willRenew=true` in our projection, so the
+voluntary-cancel path (`active + period_expired + !willRenew → expired`) never fires on
+schedule. Two ways to stop dropping the second fact:
+
+| | **(i) Facet-suffixed inbox keys** | **(ii) Combined consumer call** |
+|---|---|---|
+| Shape | `normalizeStripeEvent` emits one `NormalizedStripeEvent` per fact (two, for a combined update); each gets its own inbox row keyed `(source, event_id, facet)` | `normalizeStripeEvent` emits one envelope carrying an ordered, non-empty list of context facts; the executor folds each onto the aggregate in one transaction, one inbox row keyed `(source, event_id)` as today |
+| Atomicity (D1, I4) | The unit of idempotency (one inbox row) stops equalling the unit of delivery (one Stripe `event.id`) — a combined update becomes two inbox rows in two transactions. A crash between them, or one facet's transaction failing after the other committed, leaves half a Stripe event applied, with no clean HTTP status for "partially applied" | `one txn = one inbox row = one Stripe event = one atomic fold` — the whole envelope commits or none of it does; no partial-application state is reachable |
+| I4 fit | Reinterprets I4's "every processed event is in the inbox exactly once" as *per-fact*, not *per-envelope* — a live rewording of an existing invariant, not just a new case | Preserves I4 as written (§3d literally: "catches exact redelivery of the **same envelope**") — no invariant text changes, no reinterpretation |
+| Schema/blast radius | `payment_events` UNIQUE constraint widens from `(source, event_id)` to `(source, event_id, facet)` — every inbox row across **both rails and reconciliation** (§3d's `(recon, run:aggregate)` key too) now needs a non-null `facet`, not just the four consumer functions' duplicate-detection path, for a Stripe-only edge case | Confined to `consume-context-event.ts` and the normalizer's `context_event` case; the other three consumer functions (purchase, subscription-economic, consumable-refund) and reconciliation are untouched |
+| Executor fit | New concept (facet) threaded through every call site, every rail, and reconciliation | The executor already owns one transaction per call; folding N facets before a single insert is a small, local extension of `consumeContextEvent`'s existing loop-free body — and works with **zero reducer changes**: both facts share one `effectiveAt` (`event.created`) and touch disjoint fields (`productId`, `willRenew`), so `applyEvent`'s `effectiveAt < highWater` staleness check (not `<=`) never suppresses the second fold, and fold order doesn't affect the outcome |
+| Apple-rail symmetry | If Apple's SNv2 payloads ever bundle multiple context facts in one notification (not observed to date), the facet key generalizes directly | Would need its own combined-fold executor call per rail, but Apple's notification shape is one-fact-per-notification today, so there's nothing to generalize to yet |
+| D5 legibility | Two inbox rows for one HTTP delivery is a surprising read for anyone reconciling `payment_events` 1:1 against Stripe's dashboard event list | One inbox row per Stripe Dashboard event, matching what an operator sees when cross-referencing |
+
+**Decided: (ii).** Code-reviewer-confirmed (2026-07-11, Opus 4.8/xhigh): the deciding argument
+is atomicity, not legibility — (i) breaks "one Stripe event = one atomic unit," which is a
+correctness regression on D1/I4, not merely a style preference, and its blast radius is wider
+than the schema-only framing suggests once reconciliation's inbox key is accounted for. A
+third option was considered and rejected: folding both field-deltas into one compound
+`ContextEvent` variant is a degenerate form of (ii) that forces a new variant into the
+`ContextEvent` union or overloads `applyContextEvent`, where (ii)'s list-fold reuses the
+existing `autorenew_set`/`plan_changed` variants untouched and generalizes to N > 2 facts for
+free.
+
+**Implementation caveat:** the envelope is an ordered, **non-empty** list of context facts.
+If a combined `customer.subscription.updated` touches only unmapped fields, the built fact
+list is empty — the normalizer must fall back to `unsupported` in that case (as it already
+does for the single-fact path today), never emit an empty-list envelope.
+
+### 3h. Delivery semantics — Stripe webhook HTTP response mapping (addendum, 2026-07-11)
+
+Not previously specified anywhere (§3e is dual-rail reconciliation authority, not HTTP
+transport — a prior read of this ADR conflated the two). Stripe's webhook contract: any
+non-2xx response is treated as "not delivered," and Stripe retries with backoff for up to
+several days. The mapping must therefore return 2xx for everything the transactional inbox
+(§3d) has durably recorded — recording **is** having handled the fact, whether or not it
+changed anything — and reserve non-2xx for cases where redelivery could still help.
+
+| Response | Applies to |
+|---|---|
+| **2xx** | Every outcome a consumer function reports as handled: `applied`, `duplicate`, `superseded`, `no_op_terminal`, `no_op_live` — the `payment_events.disposition` values actually written — **plus `generation_created`** (`consumePurchaseEvent`'s new-subscription outcome — internally persisted as `applied`, per consume-purchase-event.ts, but returned to the caller under its own name; the flagship "a member just started paying" case does not get to be an inference from the enum). `duplicate` is a legal disposition value but is never itself persisted — the delivery that would have written it aborts at the inbox insert instead — so read this row as "every outcome that means the fact is already recorded," not literally every value written to a row. All of these mean Stripe must not retry: the fact is already ours, whether or not it changed local state. |
+| **400** | Signature verification failure (`verifyStripeWebhookEvent`'s `ok: false`). Not transient — the payload/signature won't become valid on retry. Stripe retries on **any** non-2xx, 400 included, same as it would a 5xx; 400 is chosen because it's the honest status for a malformed/unauthenticated request, not because it suppresses retries — those retries simply keep failing the same way and exhaust into Stripe's dashboard as permanently failed, which is the correct terminal state for a signature that will never verify. |
+| **5xx** | Two genuinely transient cases: (a) an infrastructure fault during processing (DB connection failure, transaction abort unrelated to a business outcome) — the same envelope, redelivered later, has a real chance of succeeding once the fault clears; (b) `no_matching_generation` (`consumeContextEvent`/`consumeSubscriptionEconomicEvent` finding no row for the target `(provider, providerSubscriptionId)`) — Stripe does not guarantee event ordering (§3b), so a context or economic event can legitimately arrive before the `purchased` event that creates the generation; redelivery on Stripe's backoff schedule gives the missing generation time to show up. This outcome is **not** written to `payment_events` (the function returns before the inbox insert), so it falls outside the 2xx row above by construction, not by oversight. If the generation genuinely never arrives (broken member↔customer linkage), Stripe's retries exhaust after ~3 days and §3e's nightly reconciliation independently backstops persistent linkage drift — the 5xx choice doesn't risk unbounded retry. |
+| **2xx + alert, not 5xx (Stripe rail only — see caveat)** | `ApplyEventDisposition: 'invalid'` (an off-graph event — §3f, `subscription-transition.ts`'s documented "mechanism TBD at executor-wiring time" seam, resolved here). On the Stripe rail, every reachable `invalid` reflects a domain-model gap (e.g. the parked `trial + renewal_failed` `TODO(decide)`) or a policy mismatch, not a transient fault — retrying changes nothing, so a 5xx here would make Stripe retry an event that will be invalid forever. The route acknowledges receipt (2xx, so Stripe stops retrying) and raises an operator alert (structured log at error level + metric increment; the ADR's TBD is resolved to "log and alert," not "write a disposition" — there is still no slot for `invalid` in `payment_events.disposition`, deliberately, per §3f). **Caveat for Stage 4 (Apple rail):** this "never retry" reasoning does not transfer as-is. Apple's `GRACE_PERIOD_EXPIRED` (`grace_exhausted`) is provider-delivered and can arrive *before* `DID_FAIL_TO_RENEW·GRACE_PERIOD` (`renewal_failed`) — a causally-early event, not a domain-gap one — landing as `active + grace_exhausted → invalid` with a *later* `effectiveAt` that the highWater guard (§3d layer 3) does not catch, since staleness only suppresses events that are behind highWater, not ahead of an unmet precondition. Treating that as "2xx, never retry" would silently strand the aggregate in entitling `grace` instead of dropping to non-entitling `billing_retry` — an entitlement leak, backstopped only by §3e's next reconciliation pass rather than caught immediately. The Apple-rail mapping (Stage 4) must distinguish a causally-early `invalid` (retry-recoverable — a 5xx candidate) from a genuine domain-gap `invalid` (2xx + alert, as here) before reusing this row's logic wholesale. |
+
+**Replay/timestamp tolerance.** `Stripe.webhooks.constructEvent` accepts a tolerance window
+(default 300s) rejecting a signed payload whose timestamp has drifted too far from now — a
+defense against a captured valid signature being replayed outside the window it was issued
+in. This is a **signature-layer** defense, orthogonal to the inbox's fact-layer dedupe (§3d
+layer 1): tolerance stops an old *signature* from being accepted at all; the inbox stops an
+accepted *event* from being applied twice. Neither substitutes for the other — an event
+replayed within the tolerance window still hits the inbox and comes back `duplicate` (2xx,
+no effect); an event outside the window never reaches normalization. Default tolerance is
+kept as-is (no product reason yet to widen or narrow it); revisit only if evidence — e.g. a
+slow-clocked deploy environment rejecting genuine deliveries — says otherwise.
+
+The route's doc comment cites **this section (§3h)**, not §3e, for its disposition→HTTP
+mapping.
+
 ### Decisions recorded (approved 2026-07-11)
 
 1. `billing_retry` is **not entitling** (grace yes, retry no; matches Apple semantics).
@@ -278,6 +344,21 @@ carries a client-minted UUID idempotency key → layer 2.
    `superseded` (I5/I5a staleness, keyed on `highWater`) and `no_op_terminal` (the generation
    here is live, not terminal) — the four-value enum had no slot for this, so it gets one
    rather than being force-mapped into `applied`.
+7. **Multi-fact envelopes: combined consumer call, one inbox row per Stripe event** (§3g,
+   2026-07-11, code-reviewer approved) — a `customer.subscription.updated` touching both
+   `items` and `cancel_at_period_end` folds both context facts in one transaction under one
+   `(source, event_id)` inbox row, rather than splitting into per-fact inbox rows keyed by a
+   new `facet` column. Decided on atomicity (D1/I4): one Stripe event must stay one atomic
+   unit, and a facet-keyed alternative would have widened `payment_events`' uniqueness key
+   across both rails and reconciliation for a Stripe-only edge case.
+8. **Stripe webhook disposition→HTTP mapping** (§3h, 2026-07-11) — 2xx for every outcome the
+   inbox has recorded (including `generation_created`, `duplicate`, `superseded`,
+   `no_op_terminal`, `no_op_live`); 400 for signature verification failure; 5xx only for
+   transient infrastructure faults and `no_matching_generation` (an ordering-race Stripe's
+   own retry schedule can resolve); `invalid` transitions get 2xx + operator alert on the
+   Stripe rail specifically — Stage 4's Apple mapping must re-derive this row, since a
+   causally-early Apple notification can produce `invalid` for reasons a blanket "never
+   retry" rule would mishandle.
 
 ### Considered questions
 
