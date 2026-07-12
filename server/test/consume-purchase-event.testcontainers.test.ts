@@ -57,6 +57,7 @@ describe('consumePurchaseEvent (ADR-0009 — generation-spawning purchase, I2/I3
       event: { type: 'purchased', offerPresent: false },
       productId: 'irlo.plus.monthly',
       invoiceOrTransactionId: invoiceId,
+      periodStart: T1,
       periodEnd: T2,
     });
 
@@ -78,6 +79,8 @@ describe('consumePurchaseEvent (ADR-0009 — generation-spawning purchase, I2/I3
     expect(ledgerRows).toHaveLength(1);
     expect(ledgerRows[0]?.entryType).toBe('grant');
     expect(ledgerRows[0]?.creditType).toBe('irlo_plus');
+    expect(ledgerRows[0]?.periodStart).toEqual(T1);
+    expect(ledgerRows[0]?.periodEnd).toEqual(T2);
 
     const [inboxRow] = await testDb.db
       .select()
@@ -155,6 +158,10 @@ describe('consumePurchaseEvent (ADR-0009 — generation-spawning purchase, I2/I3
       .where(eq(subscriptions.providerSubscriptionId, providerSubscriptionId));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.generation).toBe(1);
+    // no_op_live means the existing generation row itself is untouched — its
+    // currentPeriodEnd must still be T1, not the second call's T2, even
+    // though a real UPDATE would have been just as easy to write by mistake.
+    expect(rows[0]?.currentPeriodEnd).toEqual(T1);
 
     const ledgerRows = await testDb.db
       .select()

@@ -46,10 +46,11 @@ function toAggregate(row: typeof subscriptions.$inferSelect): SubscriptionAggreg
  * ADR-0009's `[*] --> trial|active` entry transition (`applyPurchase`),
  * generation-spawning included — the one economic event that may run
  * against a `(provider, providerSubscriptionId)` with **no row yet** (the
- * first-ever purchase). That's why this is a separate function from
- * `consumeSubscriptionEconomicEvent` (renewed/refunded, which only ever
- * touch an existing generation) rather than one shared function: the
- * concurrency-control needs genuinely differ.
+ * first-ever purchase). That's why this is a separate function from the
+ * upcoming `consumeSubscriptionEconomicEvent` (renewed/refunded, which only
+ * ever touch an existing generation — not yet built as of this commit)
+ * rather than one shared function: the concurrency-control needs genuinely
+ * differ.
  *
  * Locking is layered, not either/or:
  * - `pg_advisory_xact_lock(hashtextextended(...))`, keyed on
