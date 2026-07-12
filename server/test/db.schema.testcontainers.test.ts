@@ -139,6 +139,18 @@ describe('ADR-0009 schema + migrations (C21)', () => {
     await expectUniqueViolation(testDb.db.insert(paymentEvents).values(row));
   });
 
+  it("accepts 'no_op_live' as a payment_events disposition — ADR-0009 addendum for a purchase/resubscribe event landing on an already-live generation", async () => {
+    await expect(
+      testDb.db.insert(paymentEvents).values({
+        source: 'stripe-webhook',
+        eventId: `evt_${randomUUID()}`,
+        payload: { kind: 'test' },
+        effectiveAt: new Date(),
+        disposition: 'no_op_live',
+      }),
+    ).resolves.not.toThrow();
+  });
+
   it('enforces ledger_entries natural_key uniqueness — idempotency layer 2 (I3)', async () => {
     const naturalKey = `stripe:invoice:${randomUUID()}`;
 
