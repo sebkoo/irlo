@@ -1,0 +1,1 @@
+ALTER TYPE "public"."payment_event_disposition" ADD VALUE 'no_op_live';

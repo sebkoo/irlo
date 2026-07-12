@@ -271,6 +271,13 @@ carries a client-minted UUID idempotency key → layer 2.
    clamping** (Σ-derivability preserved; spends blocked until repaid) — see I2.
 5. **I5a** stale-but-economic events: suppression applies to state transitions only, never
    to ledger appends or period context.
+6. **`payment_events.disposition` gains `no_op_live`** (2026-07-11, alongside the economic-event
+   executor): a purchase/resubscribe event that lands on an already-live generation — validly
+   processed (new inbox row; the ledger money-fact is idempotently recorded or already exists
+   under a different envelope), but producing no new-generation effect. Distinct from
+   `superseded` (I5/I5a staleness, keyed on `highWater`) and `no_op_terminal` (the generation
+   here is live, not terminal) — the four-value enum had no slot for this, so it gets one
+   rather than being force-mapped into `applied`.
 
 ### Considered questions
 

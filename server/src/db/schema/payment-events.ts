@@ -20,6 +20,13 @@ export const paymentEventDispositionEnum = pgEnum('payment_event_disposition', [
   'duplicate',
   'superseded',
   'no_op_terminal',
+  // ADR-0009 addendum (see "Decisions recorded" §6): a purchase/resubscribe
+  // event that lands on an already-live generation (a different envelope of
+  // an economic fact whose ledger row already exists, or a genuinely
+  // redundant purchase signal). Distinct from 'superseded' (I5/I5a
+  // staleness — this isn't about highWater) and 'no_op_terminal' (the
+  // generation here is live, not terminal).
+  'no_op_live',
 ]);
 
 export const paymentEvents = pgTable(
