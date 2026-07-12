@@ -22,5 +22,22 @@
         ]
       }
     ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(make test*)",
+      "Bash(pnpm * test*)",
+      "Bash(pnpm * typecheck)",
+      "Bash(pnpm * lint)",
+      "Bash(git status)",
+      "Bash(git log*)",
+      "Bash(git diff*)",
+      "Bash(git show*)",
+      "Bash(colima status*)",
+      "Bash(docker ps*)",
+      "Bash(docker exec * psql *)",
+      "Bash(cat *)",
+      "Bash(ls*)"
+    ]
   }
 }
