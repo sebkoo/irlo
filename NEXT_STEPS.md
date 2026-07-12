@@ -230,6 +230,19 @@ pgvector Deck re-ranking MVP mapped to the five-layer AI stack
 
 ## Deferred / parked items
 
+- `.claude/hooks/protect-constitution-bash.sh` (the Bash-matcher constitution guard,
+  methodology.md self-enforcement case 7) has a known minor false-positive: its
+  mutation-signature check matches a bare `>` anywhere in the command string, not
+  specifically redirection *into* a protected path — so a read-only command that both
+  mentions `.claude/settings*.json`/`.claude/hooks/` in an argument *and* uses `2>/dev/null`
+  or `2>&1` elsewhere (common for suppressing stderr on diagnostics) gets blocked too.
+  Found 2026-07-12, same session as the guard's first fix. Not fixed same-session per the
+  constitution-edit rule this incident produced (propose-diff, human-applies) and the
+  operator's explicit "no more harness work this session" — workaround in the meantime is
+  to avoid combining a protected-path mention with a `2>`/`&>` redirect in one Bash call.
+  A tighter fix would require the `>` check to confirm the redirect target (not just any
+  `>` in the string) is actually one of the protected paths, mirroring the existing
+  word-boundary treatment already applied to `cp`/`mv`/`rm`/`dd`/etc.
 - CI Docker image-pull caching (e.g. GitHub Actions cache for the Testcontainers
   postgres:17-alpine layer) — watch, not urgent: the first Testcontainers-enabled
   server CI run added +16s over the prior baseline (41s vs ~25s; run

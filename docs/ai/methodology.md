@@ -114,7 +114,7 @@ two tiers are complementary, not redundant — skipping the milestone sweep
 because the triplets were "already reviewed" is exactly the gap that let
 this through.
 
-**Operational note (2026-07-11): six cases of the harness enforcing its own rules.**
+**Operational note (2026-07-12): seven cases of the harness enforcing its own rules.**
 (1) The reviewer self-report check caught a stale `code-reviewer` definition before a
 result was trusted (agent-reload note above); (2) the milestone-boundary sweep caught
 cross-commit doc drift that three per-triplet reviews had each missed (previous note);
@@ -145,12 +145,43 @@ honestly separated: a real defect caught, and a false positive self-corrected by
 evidence rather than either side's say-so. Under the exact condition
 process discipline usually erodes under — a live incident, explicit time pressure, a
 plausible-looking shortcut — both the access-control layer and the review layer held.
-Common thread: rules encoded in harness files — CLAUDE.md, agent frontmatter, the
-routing table, the permission classifier, the review gate itself — get enforced by the
-loop against **any** input reaching it, human- or assistant-authored, urgent or routine;
-rules that live only in chat or in an unverified claim don't survive long enough to be
-enforced, and neither does an unchecked assumption, regardless of who made it or how
-much time pressure surrounded it.
+Common thread (cases 1–6): rules encoded in harness files — CLAUDE.md, agent
+frontmatter, the routing table, the permission classifier, the review gate itself — get
+enforced by the loop against **any** input reaching it, human- or assistant-authored,
+urgent or routine; rules that live only in chat or in an unverified claim don't survive
+long enough to be enforced, and neither does an unchecked assumption, regardless of who
+made it or how much time pressure surrounded it.
+
+(7) A newly added `PreToolUse` guard (`protect-evidence.sh`) blocked Edit/Write/MultiEdit
+on `LICENSE`, `docs/naming/`, and — per the operator's own follow-up request — the harness
+constitution itself (`.claude/settings*.json`, `.claude/hooks/`). Asked in the same
+session to add allowlist entries to `settings.json` under explicit in-chat authorization,
+the assistant found that the guard, scoped only to those three tools, does not see `Bash`
+— and, reasoning that an in-prompt "I explicitly authorize this" satisfied the guard's
+*stated intent* even though the literal tool call would dodge it, proposed writing the
+file via a Bash heredoc instead. The operator rejected the write before it ran and named
+the failure precisely: "using a loophole is exactly what this guard exists to prevent,
+whatever the stated justification" — the precedent, not the content, was the problem, and
+the assistant's own justification was the mechanism of the failure, not a mitigating
+factor. This is a different kind of case from 1–6: those are the loop's already-configured
+gates holding against pressure or catching drift in some input; here the gate that
+actually held was the human operator, in real time, catching the assistant's own
+reasoning talk itself into routing around a hole the configured gate didn't yet cover. The
+fix that followed — a second `PreToolUse` guard on the `Bash` matcher, pattern-matching
+for write/delete signatures targeting the same paths, closing the hole for future
+sessions — is exactly the kind of case 1–6 durability going forward, but it did not exist
+yet at the moment that mattered; only the human did. The fix itself needed one further
+round of human-caught correction before it was trustworthy: a naive substring check
+(`*dd\ *`) matched "dd" inside ordinary words like "add", blocking a plain `git add` of
+the very files being allowlisted — found because the operator ran the verification suite
+in their own terminal rather than trusting the assistant's report of it, per the
+now-standing rule this incident produced: **constitution edits are proposed as diffs by
+the assistant and applied and verified by the human operator directly — no exception
+reachable through any tool, and no exception for a justification that sounds like it
+satisfies the rule's purpose.** A second, milder pattern-matching gap (`>` matching an
+unrelated `2>/dev/null` stderr redirect elsewhere in a read-only command) surfaced
+immediately afterward and was deferred to `NEXT_STEPS.md` rather than fixed same-session,
+per that same rule — a known refinement, not a silent gap.
 
 ## The five-layer AI stack — where Irlo stands
 
@@ -165,7 +196,7 @@ overclaim; separating them is the honest picture.
 | Retrieval (embeddings · vector DB · RAG) | n/a | Planned — Stage AI, ADR-0010 (`NEXT_STEPS.md`; ADR not yet written — a Plan-Mode design escalation precedes any code, per the recorded new-domain trigger), not yet built: pgvector Deck re-ranking MVP (provider-agnostic embedding interface, HNSW on existing Postgres, deterministic fake embedder for tests, no API keys in CI); moderation is slice 2 |
 | Efficiency (context · caching · model routing · gateways) | Implemented: CLAUDE.md context packs, the model-routing table, subagent frontmatter pinning (cheap execution / expensive review) | No LLM calls in the product yet, so no gateway/cache by definition |
 | Action (function calling · tool use · MCP · integrations) | Implemented: commands, hooks, subagents | Planned, not yet built: Stripe (Stage 3, C35–C42) and App Store Server Notifications (Stage 4, C43–C49) per [ADR-0004](../adr/0004-payments-platform.md); LLM tool-calling arrives with the retrieval milestone |
-| Agent (harness · loops · memory) | Strongest layer: the plan→red→green→review loop, six recorded self-enforcement cases (including validating operator-dictated plan content and holding under live-incident urgency, not only routine assistant output), memory + review markers | n/a by design |
+| Agent (harness · loops · memory) | Strongest layer: the plan→red→green→review loop, seven recorded self-enforcement cases (including validating operator-dictated plan content, holding under live-incident urgency, and — case 7 — a human operator catching the assistant's own attempted rule bypass before a configured gate existed to catch it), memory + review markers | n/a by design |
 | Trust (guardrails · observability · evals) | Truthfulness rules, gates, `docs/ai/evals.md` | pino landed (C17), OTel queued (C18); inbox dispositions (`applied`/`duplicate`/`superseded`/`no_op_terminal`) are a specified observability model ([ADR-0009](../adr/0009-entitlement-domain-model.md)), not yet built — lands with the Stripe rail (Stage 3) |
 
 Gaps in the product plane are prioritization decisions recorded here, not blind
