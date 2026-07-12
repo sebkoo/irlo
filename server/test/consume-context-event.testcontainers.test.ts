@@ -3,7 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { consumeContextEvent } from '../src/payments/consume-context-event.js';
+import {
+  consumeContextEvent,
+  type ConsumeContextEventInput,
+} from '../src/payments/consume-context-event.js';
 import { createMembersRepository } from '../src/db/repositories/members.js';
 import { createSubscriptionsRepository } from '../src/db/repositories/subscriptions.js';
 import { paymentEvents, subscriptions } from '../src/db/schema/index.js';
@@ -54,7 +57,7 @@ describe('consumeContextEvent (ADR-0009 I4 — transactional inbox, context-only
       effectiveAt: T2,
       provider: 'stripe',
       providerSubscriptionId,
-      event: { type: 'autorenew_set', willRenew: false },
+      events: [{ type: 'autorenew_set', willRenew: false }],
     });
 
     expect(result).toEqual({ outcome: 'applied' });
@@ -86,7 +89,7 @@ describe('consumeContextEvent (ADR-0009 I4 — transactional inbox, context-only
       effectiveAt: T2,
       provider: 'stripe',
       providerSubscriptionId,
-      event: { type: 'plan_changed', productId: 'price_yearly' },
+      events: [{ type: 'plan_changed', productId: 'price_yearly' }],
     });
 
     expect(result).toEqual({ outcome: 'applied' });
@@ -112,7 +115,7 @@ describe('consumeContextEvent (ADR-0009 I4 — transactional inbox, context-only
       effectiveAt: T2,
       provider: 'stripe',
       providerSubscriptionId,
-      event: { type: 'renewal_extended' },
+      events: [{ type: 'renewal_extended' }],
       periodEnd: extendedPeriodEnd,
     });
 
@@ -123,6 +126,43 @@ describe('consumeContextEvent (ADR-0009 I4 — transactional inbox, context-only
       .from(subscriptions)
       .where(eq(subscriptions.providerSubscriptionId, providerSubscriptionId));
     expect(row?.currentPeriodEnd).toEqual(extendedPeriodEnd);
+  });
+
+  it('ADR-0009 §3g: a combined envelope folds all facts in one transaction under one inbox row', async () => {
+    const providerSubscriptionId = `sub_${randomUUID()}`;
+    await seedGeneration(providerSubscriptionId);
+    const eventId = randomUUID();
+
+    const result = await consumeContextEvent(testDb.db, {
+      source: 'stripe',
+      eventId,
+      eventType: 'customer.subscription.updated',
+      payload: { id: eventId },
+      effectiveAt: T2,
+      provider: 'stripe',
+      providerSubscriptionId,
+      events: [
+        { type: 'plan_changed', productId: 'price_yearly' },
+        { type: 'autorenew_set', willRenew: false },
+      ],
+    });
+
+    expect(result).toEqual({ outcome: 'applied' });
+
+    const [row] = await testDb.db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.providerSubscriptionId, providerSubscriptionId));
+    expect(row?.productId).toBe('price_yearly');
+    expect(row?.willRenew).toBe(false);
+    expect(row?.highWater).toEqual(T2);
+
+    const inboxRows = await testDb.db
+      .select()
+      .from(paymentEvents)
+      .where(and(eq(paymentEvents.source, 'stripe'), eq(paymentEvents.eventId, eventId)));
+    expect(inboxRows).toHaveLength(1);
+    expect(inboxRows[0]?.disposition).toBe('applied');
   });
 
   it('a stale context event reports superseded and does not update willRenew/productId', async () => {
@@ -147,7 +187,7 @@ describe('consumeContextEvent (ADR-0009 I4 — transactional inbox, context-only
       effectiveAt: T1, // stale relative to highWater
       provider: 'stripe',
       providerSubscriptionId,
-      event: { type: 'autorenew_set', willRenew: false },
+      events: [{ type: 'autorenew_set', willRenew: false }],
     });
 
     expect(result).toEqual({ outcome: 'superseded' });
@@ -163,15 +203,15 @@ describe('consumeContextEvent (ADR-0009 I4 — transactional inbox, context-only
     const providerSubscriptionId = `sub_${randomUUID()}`;
     await seedGeneration(providerSubscriptionId);
     const eventId = randomUUID();
-    const input = {
+    const input: ConsumeContextEventInput = {
       source: 'stripe',
       eventId,
       eventType: 'customer.subscription.updated',
       payload: { id: eventId },
       effectiveAt: T2,
-      provider: 'stripe' as const,
+      provider: 'stripe',
       providerSubscriptionId,
-      event: { type: 'autorenew_set' as const, willRenew: false },
+      events: [{ type: 'autorenew_set', willRenew: false }],
     };
 
     const first = await consumeContextEvent(testDb.db, input);
@@ -199,7 +239,7 @@ describe('consumeContextEvent (ADR-0009 I4 — transactional inbox, context-only
       effectiveAt: T2,
       provider: 'stripe',
       providerSubscriptionId,
-      event: { type: 'autorenew_set', willRenew: false },
+      events: [{ type: 'autorenew_set', willRenew: false }],
     });
 
     expect(result).toEqual({ outcome: 'no_matching_generation' });
@@ -228,7 +268,7 @@ describe('consumeContextEvent (ADR-0009 I4 — transactional inbox, context-only
         effectiveAt: T2,
         provider: 'stripe',
         providerSubscriptionId,
-        event: { type: 'autorenew_set', willRenew: false },
+        events: [{ type: 'autorenew_set', willRenew: false }],
       }),
     ).rejects.toMatchObject({ cause: { code: '23502' } });
 

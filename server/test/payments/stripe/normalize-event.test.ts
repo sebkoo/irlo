@@ -90,7 +90,7 @@ describe('normalizeStripeEvent (ADR-0009 §3b — Stripe event-mapping table)', 
   });
 
   describe('customer.subscription.updated — previous_attributes diffing', () => {
-    it('a changed cancel_at_period_end normalizes to autorenew_set, willRenew inverse of the current flag', () => {
+    it('a changed cancel_at_period_end normalizes to a single-fact autorenew_set envelope, willRenew inverse of the current flag', () => {
       const result = normalizeStripeEvent({
         type: 'customer.subscription.updated',
         data: {
@@ -101,11 +101,11 @@ describe('normalizeStripeEvent (ADR-0009 §3b — Stripe event-mapping table)', 
 
       expect(result).toEqual({
         kind: 'context_event',
-        event: { type: 'autorenew_set', willRenew: true },
+        events: [{ type: 'autorenew_set', willRenew: true }],
       });
     });
 
-    it('a changed items normalizes to plan_changed with the new price id as productId', () => {
+    it('a changed items normalizes to a single-fact plan_changed envelope with the new price id as productId', () => {
       const result = normalizeStripeEvent({
         type: 'customer.subscription.updated',
         data: {
@@ -119,7 +119,7 @@ describe('normalizeStripeEvent (ADR-0009 §3b — Stripe event-mapping table)', 
 
       expect(result).toEqual({
         kind: 'context_event',
-        event: { type: 'plan_changed', productId: 'price_yearly' },
+        events: [{ type: 'plan_changed', productId: 'price_yearly' }],
       });
     });
 
@@ -153,7 +153,7 @@ describe('normalizeStripeEvent (ADR-0009 §3b — Stripe event-mapping table)', 
       });
     });
 
-    it('when both cancel_at_period_end and items changed in the same event, plan_changed takes precedence', () => {
+    it('ADR-0009 §3g: when both cancel_at_period_end and items changed in the same event, both facts are emitted in one envelope — plan_changed first, then autorenew_set, neither dropped', () => {
       const result = normalizeStripeEvent({
         type: 'customer.subscription.updated',
         data: {
@@ -170,7 +170,28 @@ describe('normalizeStripeEvent (ADR-0009 §3b — Stripe event-mapping table)', 
 
       expect(result).toEqual({
         kind: 'context_event',
-        event: { type: 'plan_changed', productId: 'price_yearly' },
+        events: [
+          { type: 'plan_changed', productId: 'price_yearly' },
+          { type: 'autorenew_set', willRenew: true },
+        ],
+      });
+    });
+
+    it('ADR-0009 §3g: an unresolvable items diff does not discard a genuine sibling autorenew_set fact in the same envelope', () => {
+      const result = normalizeStripeEvent({
+        type: 'customer.subscription.updated',
+        data: {
+          object: { cancel_at_period_end: false, items: { data: [] } },
+          previous_attributes: {
+            cancel_at_period_end: true,
+            items: { data: [{ price: { id: 'price_monthly' } }] },
+          },
+        },
+      });
+
+      expect(result).toEqual({
+        kind: 'context_event',
+        events: [{ type: 'autorenew_set', willRenew: true }],
       });
     });
   });
