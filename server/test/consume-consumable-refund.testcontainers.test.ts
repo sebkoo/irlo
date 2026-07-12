@@ -28,6 +28,10 @@ const T1 = new Date('2026-01-01T00:00:00Z');
 describe('consumeConsumableRefund (ADR-0009 I2 — the negative-balance debt path)', () => {
   it('a refund-debit reduces an existing positive balance', async () => {
     const ledger = createLedgerRepository(testDb.db);
+    // a delta, not an absolute value: seedMemberId's 'spark' balance is
+    // shared across every test in this file (see Race 4's own comment
+    // below), so an absolute assertion here would be order-fragile.
+    const balanceBefore = await ledger.getBalance(seedMemberId, 'spark');
     await ledger.append({
       memberId: seedMemberId,
       entryType: 'credit',
@@ -51,7 +55,7 @@ describe('consumeConsumableRefund (ADR-0009 I2 — the negative-balance debt pat
     });
 
     expect(result).toEqual({ outcome: 'applied' });
-    expect(await ledger.getBalance(seedMemberId, 'spark')).toBe(3);
+    expect(await ledger.getBalance(seedMemberId, 'spark')).toBe(balanceBefore + 5 - 2);
   });
 
   it('I2 debt path: a refund-debit on an already-fully-spent balance drives it negative, no clamp, no throw', async () => {
@@ -76,9 +80,11 @@ describe('consumeConsumableRefund (ADR-0009 I2 — the negative-balance debt pat
     expect(await ledger.getBalance(seedMemberId, 'undo')).toBe(-4);
   });
 
-  it('I3: replaying the same refund id under a different eventId adds no second row, balance unaffected the second time', async () => {
+  it('I3: replaying the same refund id under a different eventId adds no second ledger row, but both distinct envelopes still persist their own inbox row (I4) — proving the SAVEPOINT, not just the outward outcome', async () => {
     const ledger = createLedgerRepository(testDb.db);
     const refundId = `re_${randomUUID()}`;
+    const firstEventId = randomUUID();
+    const secondEventId = randomUUID();
     const baseInput = {
       source: 'apple' as const,
       eventType: 'REFUND',
@@ -91,17 +97,34 @@ describe('consumeConsumableRefund (ADR-0009 I2 — the negative-balance debt pat
       quantity: 1,
     };
 
-    const first = await consumeConsumableRefund(testDb.db, { ...baseInput, eventId: randomUUID() });
+    const first = await consumeConsumableRefund(testDb.db, { ...baseInput, eventId: firstEventId });
     expect(first).toEqual({ outcome: 'applied' });
     const balanceAfterFirst = await ledger.getBalance(seedMemberId, 'waitlist_skip');
 
     const second = await consumeConsumableRefund(testDb.db, {
       ...baseInput,
-      eventId: randomUUID(),
+      eventId: secondEventId,
     });
     expect(second).toEqual({ outcome: 'applied' });
 
     expect(await ledger.getBalance(seedMemberId, 'waitlist_skip')).toBe(balanceAfterFirst);
+
+    // Without the SAVEPOINT around the ledger insert, the second call's
+    // caught natural-key unique violation would leave its outer
+    // transaction aborted, silently downgrading its COMMIT to a ROLLBACK —
+    // discarding this second envelope's inbox row even though the function
+    // returned 'applied'. Asserting both rows persisted (not just the
+    // returned outcome) is what actually catches that mutation.
+    const firstInbox = await testDb.db
+      .select()
+      .from(paymentEvents)
+      .where(and(eq(paymentEvents.source, 'apple'), eq(paymentEvents.eventId, firstEventId)));
+    const secondInbox = await testDb.db
+      .select()
+      .from(paymentEvents)
+      .where(and(eq(paymentEvents.source, 'apple'), eq(paymentEvents.eventId, secondEventId)));
+    expect(firstInbox).toHaveLength(1);
+    expect(secondInbox).toHaveLength(1);
   });
 
   it('a redelivered (source, eventId) is reported duplicate and applies no second effect', async () => {
@@ -187,7 +210,23 @@ describe('consumeConsumableRefund (ADR-0009 I2 — the negative-balance debt pat
     expect(inboxRows).toHaveLength(0);
   });
 
-  it('Race 4 — two concurrent deliveries of the SAME event (identical eventId): exactly one debit row; one applied, one duplicate (no lock needed — the unique constraint alone serializes this)', async () => {
+  // Race 4 — best-effort concurrent sanity check, deliberately NOT a
+  // raceViaAdvisoryLock-style deterministic-interleaving proof like Races
+  // 1-3: this function takes no lock at all, so there is no advisory-lock
+  // wait to pre-hold and confirm via pg_locks the way the barrier harness
+  // needs. The actual exactly-once guarantee here rests on an analytical
+  // argument (Postgres's own UNIQUE(source, event_id) index serializes any
+  // two inserts targeting the same key, full stop, regardless of timing —
+  // see the module doc comment) plus the sequential I3/duplicate tests
+  // above, which already exercise the natural-key and inbox unique paths
+  // deterministically. This test's `Promise.allSettled` genuinely does fire
+  // two real connections concurrently (the shared pool's default max of 10
+  // gives both their own connection), so a run where the schema-level
+  // constraint were somehow NOT enforced would still be caught — but a run
+  // where the two calls happen to interleave sequentially due to
+  // scheduling is not distinguishable from a genuinely concurrent one here,
+  // unlike Races 1-3's confirmed-blocked-waiters guarantee.
+  it('Race 4 (best-effort) — two concurrent deliveries of the SAME event (identical eventId): exactly one debit row; one applied, one duplicate', async () => {
     const ledger = createLedgerRepository(testDb.db);
     const balanceBefore = await ledger.getBalance(seedMemberId, 'spark');
     const eventId = randomUUID();

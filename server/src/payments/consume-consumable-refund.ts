@@ -78,6 +78,13 @@ export async function consumeConsumableRefund(
             quantity: input.quantity,
             periodStart: null,
             periodEnd: null,
+            // Keyed only on (provider, refundId), not creditType — correct
+            // under the invariant that one provider refund id refers to one
+            // specific charge, i.e. one specific consumable bucket (the
+            // Stage 4 Apple ONE_TIME_CHARGE path this is built for). If a
+            // future rail ever lets one refund id span multiple buckets,
+            // this natural key would need creditType folded in too, or the
+            // second bucket's debit would collapse into this one's.
             naturalKey: `${input.provider}:refund:${input.refundId}`,
           });
         });
@@ -85,6 +92,11 @@ export async function consumeConsumableRefund(
         if (!isUniqueViolation(error)) throw error;
       }
 
+      // Always 'applied', even on the I3 natural-key-collision path (a
+      // different envelope of an already-recorded refund): there is no
+      // analogous no_op_live/superseded/no_op_terminal concept here (no
+      // aggregate, no disposition to distinguish) — 'applied' means
+      // "this envelope was processed," which is true either way.
       return { outcome: 'applied' as const };
     });
   } catch (error) {
