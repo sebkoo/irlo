@@ -54,12 +54,8 @@
           "name": "admission_events_application_id_applications_id_fk",
           "tableFrom": "admission_events",
           "tableTo": "applications",
-          "columnsFrom": [
-            "application_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["application_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -164,12 +160,8 @@
           "name": "applications_member_id_members_id_fk",
           "tableFrom": "applications",
           "tableTo": "members",
-          "columnsFrom": [
-            "member_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["member_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -217,12 +209,8 @@
           "name": "consumable_balances_member_id_members_id_fk",
           "tableFrom": "consumable_balances",
           "tableTo": "members",
-          "columnsFrom": [
-            "member_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["member_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -230,10 +218,7 @@
       "compositePrimaryKeys": {
         "consumable_balances_member_id_credit_type_pk": {
           "name": "consumable_balances_member_id_credit_type_pk",
-          "columns": [
-            "member_id",
-            "credit_type"
-          ]
+          "columns": ["member_id", "credit_type"]
         }
       },
       "uniqueConstraints": {},
@@ -315,12 +300,8 @@
           "name": "ledger_entries_member_id_members_id_fk",
           "tableFrom": "ledger_entries",
           "tableTo": "members",
-          "columnsFrom": [
-            "member_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["member_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -330,9 +311,7 @@
         "ledger_entries_natural_key_unique": {
           "name": "ledger_entries_natural_key_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "natural_key"
-          ]
+          "columns": ["natural_key"]
         }
       },
       "policies": {},
@@ -435,10 +414,7 @@
         "payment_events_source_event_id_key": {
           "name": "payment_events_source_event_id_key",
           "nullsNotDistinct": false,
-          "columns": [
-            "source",
-            "event_id"
-          ]
+          "columns": ["source", "event_id"]
         }
       },
       "policies": {},
@@ -535,12 +511,8 @@
           "name": "subscriptions_member_id_members_id_fk",
           "tableFrom": "subscriptions",
           "tableTo": "members",
-          "columnsFrom": [
-            "member_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["member_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -550,11 +522,7 @@
         "subscriptions_provider_sub_id_generation_key": {
           "name": "subscriptions_provider_sub_id_generation_key",
           "nullsNotDistinct": false,
-          "columns": [
-            "provider",
-            "provider_subscription_id",
-            "generation"
-          ]
+          "columns": ["provider", "provider_subscription_id", "generation"]
         }
       },
       "policies": {},
@@ -582,10 +550,7 @@
     "public.application_lane": {
       "name": "application_lane",
       "schema": "public",
-      "values": [
-        "standard",
-        "priority"
-      ]
+      "values": ["standard", "priority"]
     },
     "public.application_state": {
       "name": "application_state",
@@ -604,43 +569,22 @@
     "public.ledger_entry_type": {
       "name": "ledger_entry_type",
       "schema": "public",
-      "values": [
-        "credit",
-        "debit",
-        "grant",
-        "reversal"
-      ]
+      "values": ["credit", "debit", "grant", "reversal"]
     },
     "public.payment_event_disposition": {
       "name": "payment_event_disposition",
       "schema": "public",
-      "values": [
-        "applied",
-        "duplicate",
-        "superseded",
-        "no_op_terminal",
-        "no_op_live"
-      ]
+      "values": ["applied", "duplicate", "superseded", "no_op_terminal", "no_op_live"]
     },
     "public.subscription_provider": {
       "name": "subscription_provider",
       "schema": "public",
-      "values": [
-        "apple",
-        "stripe"
-      ]
+      "values": ["apple", "stripe"]
     },
     "public.subscription_state": {
       "name": "subscription_state",
       "schema": "public",
-      "values": [
-        "trial",
-        "active",
-        "grace",
-        "billing_retry",
-        "expired",
-        "refunded"
-      ]
+      "values": ["trial", "active", "grace", "billing_retry", "expired", "refunded"]
     }
   },
   "schemas": {},
