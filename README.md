@@ -47,11 +47,14 @@ is built. What runs vs. what's design-stage is labeled in
 ([ADR-0009](docs/adr/0009-entitlement-domain-model.md)) and the Stripe side of
 the payments rail, landed as reviewed TDD triplets:
 
-- **Stripe webhook machinery** — signature verification, event normalization,
-  and four idempotent event consumers (purchases, subscription economic
-  events, multi-fact context envelopes, consumable refunds) in
-  [`server/src/payments/`](server/src/payments/); the HTTP endpoint is the
-  slice in flight ([`NEXT_STEPS.md`](NEXT_STEPS.md))
+- **Stripe webhook endpoint** — signature verification, event normalization,
+  four idempotent event consumers (purchases, subscription economic events,
+  multi-fact context envelopes, consumable refunds), and the `POST
+  /webhooks/stripe` route dispatching into them, in
+  [`server/src/payments/`](server/src/payments/) and
+  [`server/src/routes/`](server/src/routes/) — Testcontainers-verified
+  against 11 fixture scenarios (golden path, redelivery dedup, signature
+  failures, and a genuine infra-fault-then-retry)
 - **Entitlement persistence** — append-only ledger, the seven-table ADR-0009
   schema as Testcontainers-verified Drizzle migrations, typed repositories in
   [`server/src/db/`](server/src/db/)
@@ -204,8 +207,8 @@ demonstrate.
 
 | Horizon | Work |
 |---|---|
-| **Now** | Stage 0 done: verified name · toolchain · canary-tested monorepo · CI · AI harness · design record (ADR 0001–0009). Server foundation live: `/health` · env config · logging · dockerized dev env · Drizzle + Testcontainers. Landed: ADR-0009 entitlement domain + Stripe event consumers ([Start here](#start-here)) |
-| **Next** | Stripe webhook endpoint online · OpenTelemetry bootstrap · admission & waitlist (US-01/02) — order of record in [`NEXT_STEPS.md`](NEXT_STEPS.md) |
+| **Now** | Stage 0 done: verified name · toolchain · canary-tested monorepo · CI · AI harness · design record (ADR 0001–0009). Server foundation live: `/health` · env config · logging · dockerized dev env · Drizzle + Testcontainers. Landed: ADR-0009 entitlement domain + Stripe event consumers + webhook endpoint ([Start here](#start-here)) |
+| **Next** | ADR-0011 member↔customer linkage design · OpenTelemetry bootstrap · admission & waitlist (US-01/02) — order of record in [`NEXT_STEPS.md`](NEXT_STEPS.md) |
 | **Later** | App Store rail → reconciliation → Deck feed → chat gateway → iOS flows → web checkout → RN screen → pgvector ranking. The 30-second demo GIF ships with the first user-facing milestone (v0.1.0) |
 
 Full sequence with commit-level granularity: [`NEXT_STEPS.md`](NEXT_STEPS.md).
