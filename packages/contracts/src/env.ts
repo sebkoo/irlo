@@ -14,6 +14,12 @@ export const serverEnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('debug'),
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }).optional(),
+  /**
+   * Stripe webhook signing secret (ADR-0009 §3h) — optional until the
+   * Stripe route boot-wires into buildApp (Stage 3), then flips to
+   * required, mirroring DATABASE_URL's own staged rollout above.
+   */
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

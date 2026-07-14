@@ -24,9 +24,10 @@ describe('.env.example contract sync', () => {
   const datastores = () =>
     parseDotenvSection(examplePath, '# --- Datastores (docker-compose dev env, C19) ---');
 
-  it('schema declares exactly the Runtime keys plus DATABASE_URL (C20)', () => {
-    // REDIS_URL stays schema-less until its first consumer lands (queues/presence).
-    const expected = [...Object.keys(runtime()), 'DATABASE_URL'].sort();
+  it('schema declares exactly the Runtime keys plus DATABASE_URL (C20) and STRIPE_WEBHOOK_SECRET (ADR-0009 §3h)', () => {
+    // REDIS_URL and STRIPE_SECRET_KEY stay schema-less until their first
+    // consumer lands (queues/presence; a live Stripe API call respectively).
+    const expected = [...Object.keys(runtime()), 'DATABASE_URL', 'STRIPE_WEBHOOK_SECRET'].sort();
 
     expect(Object.keys(serverEnvSchema.shape).sort()).toEqual(expected);
   });
