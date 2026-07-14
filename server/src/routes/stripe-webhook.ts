@@ -73,7 +73,9 @@ export function registerStripeWebhookRoute(
     scoped.addContentTypeParser(
       'application/json',
       { parseAs: 'buffer' },
-      (_request, body, done) => done(null, body),
+      (_request, body, done) => {
+        done(null, body);
+      },
     );
 
     scoped.post('/webhooks/stripe', async (request, reply) => {
@@ -119,12 +121,13 @@ export function registerStripeWebhookRoute(
       }
 
       if (normalized.kind === 'context_event') {
+        /* c8 ignore next 7 -- unreachable: today context_event only ever
+         * originates from customer.subscription.updated (see
+         * normalize-event.ts's own §3b coverage comment) — a real routing
+         * bug, not a known stub, if this ever fires, hence 5xx + alert
+         * rather than a silent 2xx no-op. Same defensive shape as the
+         * invoice.paid guard below. */
         if (event.type !== 'customer.subscription.updated') {
-          // Defensive: today context_event only ever originates from
-          // customer.subscription.updated (see normalize-event.ts's own
-          // §3b coverage comment) — a real routing bug, not a known stub,
-          // if this ever fires, hence 5xx + alert rather than a silent
-          // 2xx no-op.
           request.log.error(
             { eventId: event.id, eventType: event.type },
             'stripe webhook: context_event from an unexpected Stripe event type',

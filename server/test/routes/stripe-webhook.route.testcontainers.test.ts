@@ -195,6 +195,47 @@ describe('POST /webhooks/stripe (ADR-0009 §3h — full route: verify, normalize
     await app.close();
   });
 
+  it('invoice.paid (subscription_cycle) with no resolvable subscription linkage — 500, alerted, nothing written', async () => {
+    const eventId = `evt_${randomUUID()}`;
+    const invoiceId = `in_${randomUUID()}`;
+
+    const { payload, signature } = signedFixture(
+      baseEvent({
+        id: eventId,
+        type: 'invoice.paid',
+        created: 1_770_000_000,
+        data: {
+          object: {
+            id: invoiceId,
+            billing_reason: 'subscription_cycle',
+            total: 999,
+            period_end: 1_769_904_000,
+            period_start: 1_767_225_600,
+            parent: null,
+          },
+        },
+      }),
+    );
+
+    const loggerStream = new MemoryLogStream();
+    const app = buildTestApp(loggerStream);
+    await app.ready();
+
+    const response = await postSignedWebhook(app, payload, signature);
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ error: 'routing_key_unresolved' });
+    expect(loggerStream.parsedLines().some((line) => line['level'] === 50)).toBe(true);
+
+    const inboxRows = await testDb.db
+      .select()
+      .from(paymentEvents)
+      .where(and(eq(paymentEvents.source, 'stripe'), eq(paymentEvents.eventId, eventId)));
+    expect(inboxRows).toHaveLength(0);
+
+    await app.close();
+  });
+
   it('invoice.payment_failed (renewal_failed) has no consumer yet — 500, alerted, nothing written', async () => {
     const providerSubscriptionId = `sub_${randomUUID()}`;
     await seedGeneration(providerSubscriptionId);
@@ -312,6 +353,37 @@ describe('POST /webhooks/stripe (ADR-0009 §3h — full route: verify, normalize
 
     expect(response.status).toBe(400);
     expect(response.body).toEqual({ error: 'signature_verification_failed' });
+
+    const inboxRows = await testDb.db
+      .select()
+      .from(paymentEvents)
+      .where(and(eq(paymentEvents.source, 'stripe'), eq(paymentEvents.eventId, eventId)));
+    expect(inboxRows).toHaveLength(0);
+
+    await app.close();
+  });
+
+  it('a request with no stripe-signature header is rejected with 400, before any DB write', async () => {
+    const eventId = `evt_${randomUUID()}`;
+    const payload = JSON.stringify(
+      baseEvent({
+        id: eventId,
+        type: 'customer.subscription.updated',
+        created: 1_700_000_000,
+        data: { object: {} },
+      }),
+    );
+
+    const app = buildTestApp(new MemoryLogStream());
+    await app.ready();
+
+    const response = await request(app.server)
+      .post('/webhooks/stripe')
+      .set('Content-Type', 'application/json')
+      .send(payload);
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: 'missing_signature' });
 
     const inboxRows = await testDb.db
       .select()
