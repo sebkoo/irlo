@@ -149,17 +149,60 @@ were blocking the webhook route — the combined-update `autorenew_set` drop and
 disposition→HTTP mapping — are now [ADR-0009 §3g and §3h](docs/adr/0009-entitlement-domain-model.md#3g-multi-fact-envelopes-addendum-decided-2026-07-11--code-reviewer-approved),
 both code-reviewer approved. See the resolved `TODO(decide)` above for the §3g summary.
 
-**Next-session opener:** the webhook consumer proper — signature verification
-(`Stripe.webhooks.constructEvent`) against fixture events, and dispatch from
-`normalizeStripeEvent`'s output (`server/src/payments/stripe/normalize-event.ts`)
-into the now-complete set of four executor functions above (context/purchase/
-subscription-economic/consumable-refund — the last of these has no real Stripe
-caller yet, since Stripe sells only the subscription today; it's wired for
-Stage 4's Apple rail), plus `normalizeStripeEvent`'s widening to emit a multi-fact
-context-event envelope (§3g) and `consumeContextEvent`'s widening to fold it in one
-transaction/one inbox row. Route HTTP status mapping per §3h; doc comment cites §3h,
-not §3e. Model routing: Sonnet 5 @ high (no fresh escalation — the Stage 3 escalation
-note above already covers this).
+**§3g implementation landed:** `normalizeStripeEvent`'s widening to emit a multi-fact
+context-event envelope and `consumeContextEvent`'s widening to fold it in one
+transaction/one inbox row are both done and code-reviewed (test/feat commits
+`ddcb01d`/`892a05c` post-history-rewrite — see `.claude/state/last-reviewed-sha`).
+
+**Named blocker found while wiring the route (2026-07-12):** `consumePurchaseEvent`
+requires a caller-supplied `memberId`, and there is no member↔customer linkage
+anywhere in the schema (`members` has no provider-linkage column) — `normalizeStripeEvent`'s
+own doc comment already flagged this as deferred (`checkout.session.completed` "member↔customer
+linkage — the executor's job, not the reducer's"), but the executor-side linkage was never
+actually built. Checked and confirmed narrower than it first looked: `consumeSubscriptionEconomicEvent`
+derives `memberId` from the existing row it locks (never external input), `consumeContextEvent`
+never needs it, and `consumeConsumableRefund` has no Stripe caller today by design — so only
+the brand-new-subscription path (`purchased` → `consumePurchaseEvent`) is actually blocked.
+**Decided (2026-07-12):** scope the first route triplet down rather than design the linkage
+inline — wire context/economic events (3 of 4 consumers) fully now; for `purchase_event`, the
+route logs + alerts and returns 5xx (transient, not a permanent domain gap — matches §3h's
+`invalid`-transition reasoning: this isn't unactionable forever, it's unactionable *until
+linkage lands*, which is a different disposition than "will never resolve"). This path is a
+real tested branch, not a stub note: a fixture asserts 5xx + an alert + zero rows written for
+a `purchase_event` with no resolvable member. **Member↔customer linkage → Stage 3
+(ADR-0011)**, a new named escalation-gated item alongside **Stage AI (ADR-0010)** above: the
+**ADR-0011 design session** (Plan Mode, escalated model) covers the linkage data model (a
+`provider_customer_id`-shaped column or table, populated via `checkout.session.completed`)
+before any schema lands — entitlement-domain-model territory per CLAUDE.md's named judgment
+escalations, not normal-session model/effort. Implementation is gated on the design session
+existing first, same split-gate shape as ADR-0010.
+
+**Next-session opener:** the webhook route itself — signature verification
+(`Stripe.webhooks.constructEvent`) against fixture events, raw-body content-type parsing
+scoped to the route, and dispatch from `normalizeStripeEvent`'s output
+(`server/src/payments/stripe/normalize-event.ts`) into `consumeContextEvent`/
+`consumeSubscriptionEconomicEvent` (fully wired) and a logged/alerted 5xx stub for
+`purchase_event` (blocked, see above) — `consumeConsumableRefund` has no Stripe caller
+yet, wired for Stage 4's Apple rail instead. Route HTTP status mapping per §3h; doc comment
+cites §3h, not §3e. Model routing: Sonnet 5 @ high (no fresh escalation for the route itself
+— the Stage 3 escalation note above already covers this; the linkage follow-up above is the
+one piece that may need its own escalation).
+
+**Route landed (2026-07-14):** `server/src/routes/stripe-webhook.ts` is wired end-to-end —
+raw-body content-type parsing scoped to the route, `Stripe.webhooks.constructEvent` signature
+verification, dispatch from `normalizeStripeEvent`'s output into `consumeContextEvent`/
+`consumeSubscriptionEconomicEvent`, and the §3h disposition→HTTP mapping — plus
+`extractSubscriptionIdFromInvoice` (`server/src/payments/stripe/extract-subscription-id.ts`)
+resolving `invoice.paid`'s routing key. `buildApp` only registers the route when both a `db`
+and `STRIPE_WEBHOOK_SECRET` are supplied (`packages/contracts`'s `serverEnvSchema` gained the
+latter, optional until this point, mirroring `DATABASE_URL`'s staged rollout). Testcontainers-
+verified against 11 fixture scenarios: the golden path for both wired consumers, redelivery
+dedup, `no_matching_generation`, a bad/reparsed signature, an unsupported event type, and a
+genuine killed-connection infra fault followed by a successful identical-redelivery retry.
+`purchase_event` (blocked on ADR-0011 linkage) and non-`renewed` `subscription_event` types
+remain the two logged/alerted 5xx stubs described above — both are real tested branches, not
+stub notes. **Next:** ADR-0011 (member↔customer linkage design, Plan Mode) or C18 (OTel
+bootstrap) — neither needs a fresh judgment escalation beyond the Stage 3 note above.
 
 ## Stage 4 — App Store rail (≈C43–C49) — US-07, US-08 (server half)
 
