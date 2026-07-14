@@ -50,8 +50,10 @@ the payments rail, landed as reviewed TDD triplets:
 - **Stripe webhook endpoint** — signature verification, event normalization,
   four idempotent event consumers (purchases, subscription economic events,
   multi-fact context envelopes, consumable refunds), and the `POST
-  /webhooks/stripe` route dispatching into them, in
-  [`server/src/payments/`](server/src/payments/) and
+  /webhooks/stripe` route dispatching into the two rails Stripe drives today
+  (context and subscription-economic; purchase is blocked on ADR-0011
+  member↔customer linkage, consumable-refund is wired for the Apple rail
+  instead) in [`server/src/payments/`](server/src/payments/) and
   [`server/src/routes/`](server/src/routes/) — Testcontainers-verified
   against 11 fixture scenarios (golden path, redelivery dedup, signature
   failures, and a genuine infra-fault-then-retry)
