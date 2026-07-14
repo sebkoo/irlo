@@ -67,3 +67,17 @@ describe('serverEnvSchema DATABASE_URL (C20)', () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe('serverEnvSchema STRIPE_WEBHOOK_SECRET (ADR-0009 §3h)', () => {
+  it('accepts a webhook signing secret', () => {
+    const parsed = serverEnvSchema.parse({ STRIPE_WEBHOOK_SECRET: 'whsec_test123' });
+
+    expect(parsed.STRIPE_WEBHOOK_SECRET).toBe('whsec_test123');
+  });
+
+  it('stays optional until the Stripe route is boot-wired', () => {
+    const parsed = serverEnvSchema.parse({});
+
+    expect(parsed.STRIPE_WEBHOOK_SECRET).toBeUndefined();
+  });
+});
