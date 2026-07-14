@@ -7,8 +7,6 @@
 *A backend-first, open-source platform for discovering and joining nearby
 in-person activities — run crews, gallery nights, pickup games.*
 
-<!-- PLACEHOLDER: logo lands with the v0.1.0 design pass (docs/media/README.md spec) -->
-
 [![CI](https://github.com/sebkoo/irlo/actions/workflows/ci.yml/badge.svg)](https://github.com/sebkoo/irlo/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/sebkoo/irlo/branch/main/graph/badge.svg)](https://codecov.io/gh/sebkoo/irlo)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -18,30 +16,24 @@ in-person activities — run crews, gallery nights, pickup games.*
 [![Platform](https://img.shields.io/badge/iOS-17%2B-black?logo=apple)](apps/ios/project.yml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-*The codecov % above is canary-surface coverage, not proof of a tested system:
-Stage 1's `server/src` is a Fastify app factory with one `/health` endpoint,
-zod-parsed env config, and structured logging
-([ADR-0003](docs/adr/0003-backend-platform.md)), covered by supertest
-integration tests plus unit/contract tests for the env config. Real coverage
-grows endpoint-by-endpoint from here — see
-[`NEXT_STEPS.md`](NEXT_STEPS.md).*
+*Honest badge scope: coverage is CI-gated (`server/src` ≥ 90%; payments +
+admission state machines 100% branch) and today measures the server foundation
+plus the ADR-0009 payments domain — a real number, not proof the whole design
+is built. What runs vs. what's design-stage is labeled in
+[Start here](#start-here).*
 
 </div>
 
 ---
 
-> **🎬 30-second demo — placeholder.** The demo GIF lands with the first
-> user-facing milestone (v0.1.0). Until then, this repo's "demo" is its
-> engineering: start with [the architecture](#architecture) and
-> [docs/adr/](docs/adr/README.md).
-
 ## Table of contents
 
+- [Start here](#start-here)
 - [What's inside](#whats-inside)
 - [Why Irlo](#why-irlo)
 - [Architecture](#architecture)
 - [Engineering quality](#engineering-quality)
-- [AI-native workflow](#ai-native-workflow)
+- [How this is built](#how-this-is-built)
 - [Roadmap](#roadmap)
 - [Getting started](#getting-started)
 - [Monetization design](#monetization-design)
@@ -49,19 +41,53 @@ grows endpoint-by-endpoint from here — see
 - [FAQ](#faq)
 - [License](#license)
 
+## Start here
+
+**Implemented and tested on `main` today** — the entitlement domain
+([ADR-0009](docs/adr/0009-entitlement-domain-model.md)) and the Stripe side of
+the payments rail, landed as reviewed TDD triplets:
+
+- **Stripe webhook machinery** — signature verification, event normalization,
+  and four idempotent event consumers (purchases, subscription economic
+  events, multi-fact context envelopes, consumable refunds) in
+  [`server/src/payments/`](server/src/payments/); the HTTP endpoint is the
+  slice in flight ([`NEXT_STEPS.md`](NEXT_STEPS.md))
+- **Entitlement persistence** — append-only ledger, the seven-table ADR-0009
+  schema as Testcontainers-verified Drizzle migrations, typed repositories in
+  [`server/src/db/`](server/src/db/)
+- **Subscription state machine** — a pure transition function in
+  [`server/src/domain/`](server/src/domain/)
+- **Server foundation** — Fastify app factory, `/health`, zod-parsed env
+  config, pino structured logging, dockerized dev env
+
+Three links that show *how* it's built, not just what:
+
+1. **A red→green pair:**
+   [`test(payments): failing spec for the context-event executor`](https://github.com/sebkoo/irlo/commit/43914db7249fce118813822f18b337c27a628764)
+   → [`feat(payments): implement the context-event executor`](https://github.com/sebkoo/irlo/commit/8d6adc7f94d891edf9c1258ab6b0d6420a03223f)
+   — the failing spec lands first, every time; the history reads like this
+   throughout.
+2. **The decision record behind it:**
+   [ADR-0009 — entitlement domain model](docs/adr/0009-entitlement-domain-model.md)
+   — states, guards, idempotency, and reconciliation pinned down *before* the
+   code.
+3. **The review loop leaving fingerprints:**
+   [`fix(payments): rename consumeContextEvent, wire renewal_extended's periodEnd (review SHOULD-FIX x2)`](https://github.com/sebkoo/irlo/commit/68890d18f8ee1becb3d034f3edc4fa06aed88110)
+   — code-reviewer findings land as their own commits, not silent amends.
+
 ## What's inside
 
 | Tier | What | Where | Evidence |
 |---|---|---|---|
-| **Platform** (Node.js/TypeScript) | Payments dual-rail (StoreKit 2 + Stripe), provider-agnostic entitlements, admission/waitlist state machine, realtime chat, Deck feed API | [`server/`](server/) · [`packages/contracts/`](packages/contracts/) | [ADR-0004](docs/adr/0004-payments-platform.md) · [ADR-0005](docs/adr/0005-member-experience-core.md) *(design docs — implementation is [planned](NEXT_STEPS.md))* |
+| **Platform** (Node.js/TypeScript) | Payments dual-rail (StoreKit 2 + Stripe), provider-agnostic entitlements, admission/waitlist state machine, realtime chat, Deck feed API | [`server/`](server/) · [`packages/contracts/`](packages/contracts/) | [ADR-0004](docs/adr/0004-payments-platform.md) · [ADR-0005](docs/adr/0005-member-experience-core.md) · [ADR-0009](docs/adr/0009-entitlement-domain-model.md) *(entitlement core + Stripe consumers implemented — [Start here](#start-here); StoreKit rail, admission, chat, Deck are [planned](NEXT_STEPS.md))* |
 | **Clients** | Swift 6 iOS app (UIKit shell + SwiftUI), React Native brownfield screen *(planned)* | [`apps/ios/`](apps/ios/) | [ADR-0008](docs/adr/0008-ios-demo-client.md) · canary tests (XCTest/XCUITest) wired into CI |
 
-Today the repo is **Stage 1 in progress**: Stage 0's verified name,
-canary-tested monorepo, CI, AI-native engineering harness, and full design
-record, plus a live Fastify `/health` endpoint, typed env config, and
-structured logging as the server foundation comes online. Every feature above
-is planned in [`NEXT_STEPS.md`](NEXT_STEPS.md) —
-nothing is quietly half-built.
+Today the repo carries Stage 0's verified name, canary-tested monorepo, CI,
+AI-native engineering harness, and full design record; a live server
+foundation; and the ADR-0009 entitlement domain + Stripe event consumers,
+landed as reviewed TDD triplets ([Start here](#start-here)). Everything beyond
+that is planned in [`NEXT_STEPS.md`](NEXT_STEPS.md) — nothing is quietly
+half-built.
 
 ## Why Irlo
 
@@ -123,14 +149,16 @@ flowchart TB
   JOBS --> RD
 ```
 
-*Everything outside `apps/ios`'s scaffold and the canary-tested workspaces is
-design-stage — see the ADR trail.*
+*The diagram is the full design. What runs today vs. what's design-stage is
+labeled in [Start here](#start-here); the trail from decision to code is
+[docs/adr/](docs/adr/README.md).*
 
 | Read the code / design | Entry point |
 |---|---|
 | ADR index (the architecture tour) | [`docs/adr/README.md`](docs/adr/README.md) |
 | Contracts-first API shapes | [`packages/contracts/src/`](packages/contracts/src/) |
 | Payments platform design | [ADR-0004](docs/adr/0004-payments-platform.md) |
+| Entitlement domain model (states · ledger · idempotency) | [ADR-0009](docs/adr/0009-entitlement-domain-model.md) |
 | Admission/waitlist design | [ADR-0005](docs/adr/0005-member-experience-core.md) |
 | User stories → tests → evidence | [`docs/user-stories.md`](docs/user-stories.md) |
 
@@ -139,9 +167,10 @@ design-stage — see the ADR trail.*
 **Why this looks like production, not a demo:**
 
 - **TDD triplets.** Every feature: `test(scope): failing spec` →
-  `feat(scope): make it pass` → `refactor(scope): …`. Real example already in
-  history: commit `test(ios): add unit and UI canary tests…` quotes its own red
-  run (`type 'RootView' has no member 'accessibilityID'`) before the green.
+  `feat(scope): make it pass` → `refactor(scope): …`. The payments domain
+  landed this way commit by commit ([Start here](#start-here)); even the first
+  iOS canary quotes its own red run (`type 'RootView' has no member
+  'accessibilityID'`) before the green.
 - **Coverage gates in CI:** `server/src` ≥ 90%; payments + admission state
   machines require 100% branch; iOS kit ≥ 85% as it grows.
 - **Contract-first APIs:** zod schemas in
@@ -156,23 +185,27 @@ design-stage — see the ADR trail.*
 - **Atomic, explained commits:** Conventional Commits 1.0; bodies explain *why*;
   history reads as a plan, not an accident — inspect `git log`.
 
-## AI-native workflow
+## How this is built
 
-Built in public with Claude Code, and the workflow is itself versioned
-engineering: a <300-line [`CLAUDE.md`](CLAUDE.md), eight encoded slash-command
-workflows, format/lint/test hooks, a code-reviewer subagent, and a
-release-blocking [eval checklist](docs/ai/evals.md) for the harness itself.
-Models and efforts used are disclosed per work type in
-[`docs/ai/methodology.md`](docs/ai/methodology.md) — transparency is part of
-the credibility.
+AI-assisted, in public, with Claude Code — and every line is reviewed before
+it lands: the AI is the typist, the engineer stays accountable. The workflow
+itself is versioned, auditable engineering: a <300-line
+[`CLAUDE.md`](CLAUDE.md) constitution, eight encoded slash-command workflows,
+format/lint/test hooks, a code-reviewer subagent whose findings land as their
+own commits, and a release-blocking [eval checklist](docs/ai/evals.md) for the
+harness itself. [`docs/ai/methodology.md`](docs/ai/methodology.md) discloses
+models and effort per work type — including seven recorded self-enforcement
+cases where the harness (or the human) caught the tool cutting a corner. That
+governance isn't an apology; it's one of the things this repo is built to
+demonstrate.
 
 ## Roadmap
 
 | Horizon | Work |
 |---|---|
-| **Now** (done) | Stage 0: verified name · toolchain · canary-tested monorepo · CI · AI harness · full design record (ADR 0001–0008). Stage 1 underway: Fastify `/health` triplet, zod-parsed env config, pino structured logging live |
-| **Next** | Server foundation online: OpenTelemetry bootstrap, Docker dev env, Drizzle + Testcontainers → then entitlements & admission (US-01/02) |
-| **Later** | Stripe rail → App Store rail → reconciliation → Deck feed → chat gateway → iOS flows → web checkout → RN screen → pgvector ranking |
+| **Now** | Stage 0 done: verified name · toolchain · canary-tested monorepo · CI · AI harness · design record (ADR 0001–0009). Server foundation live: `/health` · env config · logging · dockerized dev env · Drizzle + Testcontainers. Landed: ADR-0009 entitlement domain + Stripe event consumers ([Start here](#start-here)) |
+| **Next** | Stripe webhook endpoint online · OpenTelemetry bootstrap · admission & waitlist (US-01/02) — order of record in [`NEXT_STEPS.md`](NEXT_STEPS.md) |
+| **Later** | App Store rail → reconciliation → Deck feed → chat gateway → iOS flows → web checkout → RN screen → pgvector ranking. The 30-second demo GIF ships with the first user-facing milestone (v0.1.0) |
 
 Full sequence with commit-level granularity: [`NEXT_STEPS.md`](NEXT_STEPS.md).
 
@@ -246,10 +279,6 @@ No — see the disclaimer below. The Member Experience domain (applications,
 waitlists, entitlements) is an industry-standard pattern studied on public
 information.
 </details>
-
-## Star history
-
-<!-- PLACEHOLDER: Star History chart (star-history.com) embeds here once the repo is public and has meaningful history. -->
 
 ## License
 
