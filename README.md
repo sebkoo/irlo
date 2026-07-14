@@ -54,9 +54,11 @@ the payments rail, landed as reviewed TDD triplets:
   (context and subscription-economic; purchase is blocked on ADR-0011
   member↔customer linkage, consumable-refund is wired for the Apple rail
   instead) in [`server/src/payments/`](server/src/payments/) and
-  [`server/src/routes/`](server/src/routes/) — Testcontainers-verified
-  against 11 fixture scenarios (golden path, redelivery dedup, signature
-  failures, and a genuine infra-fault-then-retry)
+  [`server/src/routes/`](server/src/routes/) — Testcontainers-verified against
+  the [route spec's fixture
+  matrix](server/test/routes/stripe-webhook.route.testcontainers.test.ts)
+  (golden path, redelivery dedup, unresolvable routing, missing/bad/reparsed
+  signatures, an unsupported event type, and a genuine infra-fault-then-retry)
 - **Entitlement persistence** — append-only ledger, the seven-table ADR-0009
   schema as Testcontainers-verified Drizzle migrations, typed repositories in
   [`server/src/db/`](server/src/db/)

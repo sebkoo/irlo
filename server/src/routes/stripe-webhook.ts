@@ -172,10 +172,11 @@ export function registerStripeWebhookRoute(
 
       // Only invoice.paid (billing_reason=subscription_cycle) normalizes
       // to 'renewed' today — see normalize-event.ts's §3b coverage.
+      /* c8 ignore next 7 -- unreachable: same defensive shape as the
+       * context_event branch above (only invoice.paid ever normalizes to
+       * 'renewed' today — see normalize-event.ts's §3b coverage) — a real
+       * routing bug if it ever fires, not a known stub. */
       if (event.type !== 'invoice.paid') {
-        /* c8 ignore next 4 -- same defensive shape as the context_event
-         * branch above: a real routing bug if it ever fires, not a known
-         * stub. */
         request.log.error(
           { eventId: event.id, eventType: event.type },
           'stripe webhook: renewed event from an unexpected Stripe event type',

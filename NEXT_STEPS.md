@@ -196,9 +196,11 @@ verification, dispatch from `normalizeStripeEvent`'s output into `consumeContext
 resolving `invoice.paid`'s routing key. `buildApp` only registers the route when both a `db`
 and `STRIPE_WEBHOOK_SECRET` are supplied (`packages/contracts`'s `serverEnvSchema` gained the
 latter, optional until this point, mirroring `DATABASE_URL`'s staged rollout). Testcontainers-
-verified against 11 fixture scenarios: the golden path for both wired consumers, redelivery
-dedup, `no_matching_generation`, a bad/reparsed signature, an unsupported event type, and a
-genuine killed-connection infra fault followed by a successful identical-redelivery retry.
+verified per the [route spec's fixture
+matrix](server/test/routes/stripe-webhook.route.testcontainers.test.ts): the golden path for
+both wired consumers, redelivery dedup, `no_matching_generation`, a missing/bad/reparsed
+signature, an unresolvable routing key, an unsupported event type, and a genuine
+killed-connection infra fault followed by a successful identical-redelivery retry.
 `purchase_event` (blocked on ADR-0011 linkage) and non-`renewed` `subscription_event` types
 remain the two logged/alerted 5xx stubs described above — both are real tested branches, not
 stub notes. **Next:** ADR-0011 (member↔customer linkage design, Plan Mode) or C18 (OTel
