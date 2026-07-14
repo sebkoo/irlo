@@ -189,7 +189,8 @@ labeled in [Start here](#start-here); the trail from decision to code is
 
 AI-assisted, in public, with Claude Code — and every line is reviewed before
 it lands: the AI is the typist, the engineer stays accountable. The workflow
-itself is versioned, auditable engineering: a <300-line
+itself is versioned, auditable engineering — prompt, context, harness, and
+loop engineering: a <300-line
 [`CLAUDE.md`](CLAUDE.md) constitution, eight encoded slash-command workflows,
 format/lint/test hooks, a code-reviewer subagent whose findings land as their
 own commits, and a release-blocking [eval checklist](docs/ai/evals.md) for the
