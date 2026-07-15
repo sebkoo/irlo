@@ -16,7 +16,7 @@ describe('startTracing (C18)', () => {
 
     expect(tracing).toBeDefined();
     tracing?.tracer.startSpan('test-span').end();
-    await tracing?.shutdown();
+    await tracing?.flush();
 
     const spans = exporter.getFinishedSpans();
     expect(spans).toHaveLength(1);
