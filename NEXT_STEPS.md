@@ -24,6 +24,10 @@ planned. This defining-line marker is the single source of truth
 recorded only in a separate prose paragraph elsewhere in this file is
 invisible to it and must be moved onto the item's own line.
 
+## Stage 0 — Naming, toolchain, CI, AI harness (done)
+
+- C01–C12 verified name, toolchain, canary-tested monorepo, CI, AI harness, docs (done)
+
 ## Stage 1 — Server foundation online (≈C13–C22)
 
 | # | Work | Notes |
