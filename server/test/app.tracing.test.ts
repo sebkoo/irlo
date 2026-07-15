@@ -14,7 +14,7 @@ describe('trace context in request logs (C18)', () => {
     const app = buildApp({
       config: { NODE_ENV: 'test', PORT: 3000, LOG_LEVEL: 'info' },
       loggerStream: stream,
-      tracing,
+      ...(tracing !== undefined && { tracing }),
     });
     await app.ready();
 
