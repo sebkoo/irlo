@@ -84,10 +84,10 @@ Three links that show *how* it's built, not just what:
 
 ## What's inside
 
-| Tier | What | Where | Evidence |
-|---|---|---|---|
-| **Platform** (Node.js/TypeScript) | Payments dual-rail (StoreKit 2 + Stripe), provider-agnostic entitlements, admission/waitlist state machine, realtime chat, Deck feed API | [`server/`](server/) · [`packages/contracts/`](packages/contracts/) | [ADR-0004](docs/adr/0004-payments-platform.md) · [ADR-0005](docs/adr/0005-member-experience-core.md) · [ADR-0009](docs/adr/0009-entitlement-domain-model.md) *(entitlement core + Stripe consumers implemented — [Start here](#start-here); StoreKit rail, admission, chat, Deck are [planned](NEXT_STEPS.md))* |
-| **Clients** | Swift 6 iOS app (UIKit shell + SwiftUI), React Native brownfield screen *(planned)* | [`apps/ios/`](apps/ios/) | [ADR-0008](docs/adr/0008-ios-demo-client.md) · canary tests (XCTest/XCUITest) wired into CI |
+| Status | Tier | What | Where | Evidence |
+|---|---|---|---|---|
+| 🚧 in progress | **Platform** (Node.js/TypeScript) | Payments dual-rail (StoreKit 2 + Stripe), provider-agnostic entitlements, admission/waitlist state machine, realtime chat, Deck feed API | [`server/`](server/) · [`packages/contracts/`](packages/contracts/) | [ADR-0004](docs/adr/0004-payments-platform.md) · [ADR-0005](docs/adr/0005-member-experience-core.md) · [ADR-0009](docs/adr/0009-entitlement-domain-model.md) *(entitlement core + Stripe consumers implemented — [Start here](#start-here); StoreKit rail, admission, chat, Deck are [planned](NEXT_STEPS.md))* |
+| 🚧 in progress | **Clients** | Swift 6 iOS app (UIKit shell + SwiftUI), React Native brownfield screen *(planned)* | [`apps/ios/`](apps/ios/) | [ADR-0008](docs/adr/0008-ios-demo-client.md) · canary tests (XCTest/XCUITest) wired into CI |
 
 Today the repo carries Stage 0's verified name, canary-tested monorepo, CI,
 AI-native engineering harness, and full design record; a live server
@@ -118,6 +118,8 @@ interaction — and, as an open-source project, to show exactly how the systems
 behind that promise are engineered.
 
 ## Architecture
+
+**Legend:** ✅ shipped & tested on `main` · 🚧 in progress · 📋 designed ([ADR-linked](docs/adr/README.md))
 
 ```mermaid
 flowchart TB
@@ -154,6 +156,14 @@ flowchart TB
   WS --> RD
   JOBS --> PG
   JOBS --> RD
+
+  classDef shipped fill:#d3f9d8,stroke:#2f9e44,color:#1b4332,stroke-width:1px
+  classDef inProgress fill:#fff3bf,stroke:#f08c00,color:#5c3d00,stroke-width:1px
+  classDef designed fill:#e9ecef,stroke:#868e96,color:#343a40,stroke-width:1px
+
+  class PG shipped
+  class IOS,API,ENT,PAY inProgress
+  class WEB,RN,WS,ADM,JOBS,RD designed
 ```
 
 *The diagram is the full design. What runs today vs. what's design-stage is
