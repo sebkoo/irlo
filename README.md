@@ -48,17 +48,23 @@ is built. What runs vs. what's design-stage is labeled in
 the payments rail, landed as reviewed TDD triplets:
 
 - **Stripe webhook endpoint** — signature verification, event normalization,
-  four idempotent event consumers (purchases, subscription economic events,
-  multi-fact context envelopes, consumable refunds), and the `POST
-  /webhooks/stripe` route dispatching into the two rails Stripe drives today
-  (context and subscription-economic; purchase is blocked on ADR-0011
-  member↔customer linkage, consumable-refund is wired for the Apple rail
-  instead) in [`server/src/payments/`](server/src/payments/) and
+  five idempotent event consumers (purchases, subscription economic events,
+  multi-fact context envelopes, consumable refunds, member↔rail-identity
+  linkage), and the `POST /webhooks/stripe` route dispatching purchase,
+  context, subscription-economic, and linkage events (consumable-refund is
+  wired for the Apple rail instead) in
+  [`server/src/payments/`](server/src/payments/) and
   [`server/src/routes/`](server/src/routes/) — Testcontainers-verified against
   the [route spec's fixture
   matrix](server/test/routes/stripe-webhook.route.testcontainers.test.ts)
   (golden path, redelivery dedup, unresolvable routing, missing/bad/reparsed
-  signatures, an unsupported event type, and a genuine infra-fault-then-retry)
+  signatures, an unsupported event type, a genuine infra-fault-then-retry, and
+  the flagship out-of-order pair — an unlinked purchase 5xxes, a
+  `checkout.session.completed` backstop links it, the same purchase envelope
+  redelivered then succeeds). A purchase whose customer has no linked member
+  still 5xxes as `unlinked_customer` — real production purchases stay in that
+  state until the checkout-session endpoint ([ADR-0011](docs/adr/0011-member-rail-identity-linkage.md)
+  slice D, not yet built) starts creating links
 - **Entitlement persistence** — append-only ledger, the seven-table ADR-0009
   schema as Testcontainers-verified Drizzle migrations, typed repositories in
   [`server/src/db/`](server/src/db/)
@@ -224,8 +230,8 @@ demonstrate.
 
 | Horizon | Work |
 |---|---|
-| **Now** | Stage 0 done: verified name · toolchain · canary-tested monorepo · CI · AI harness · design record (ADR 0001–0009). Server foundation live: `/health` · env config · logging · dockerized dev env · Drizzle + Testcontainers. Landed: ADR-0009 entitlement domain + Stripe event consumers + webhook endpoint ([Start here](#start-here)) |
-| **Next** | ADR-0011 member↔customer linkage design · OpenTelemetry bootstrap · admission & waitlist (US-01/02) — order of record in [`NEXT_STEPS.md`](NEXT_STEPS.md) |
+| **Now** | Stage 0 done: verified name · toolchain · canary-tested monorepo · CI · AI harness · design record (ADR 0001–0009). Server foundation live: `/health` · env config · logging · dockerized dev env · Drizzle + Testcontainers. Landed: ADR-0009 entitlement domain + Stripe event consumers + webhook endpoint + ADR-0011 member↔rail-identity linkage (design, `rail_identities` repository, the linkage consumer, and purchase-branch retirement — slices A–C) ([Start here](#start-here)) |
+| **Next** | ADR-0011 slice D — the checkout-session endpoint (the missing link creator; real purchases 5xx until it lands) · OpenTelemetry bootstrap · admission & waitlist (US-01/02) — order of record in [`NEXT_STEPS.md`](NEXT_STEPS.md) |
 | **Later** | App Store rail → reconciliation → Deck feed → chat gateway → iOS flows → web checkout → RN screen → pgvector ranking. The 30-second demo GIF ships with the first user-facing milestone (v0.1.0) |
 
 Full sequence with commit-level granularity: [`NEXT_STEPS.md`](NEXT_STEPS.md).
