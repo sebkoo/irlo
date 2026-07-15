@@ -300,15 +300,22 @@ describe('POST /webhooks/stripe (ADR-0009 §3h — full route: verify, normalize
     await app.close();
   });
 
-  it('purchase_event (new subscription) is blocked on member<->customer linkage (ADR-0011) — 500, alerted, nothing written', async () => {
+  it('purchase_event (new subscription) for a customer with no linked member is unlinked_customer — 500, alerted, nothing written (ADR-0009 §3h case (c), ADR-0011 §3d/§3f)', async () => {
+    // ADR-0011 §3g item 1: this is the stub-branch fixture test mutated
+    // into the unlinked_customer test — same assertion shape (5xx +
+    // alert + zero rows), new meaning (no link found for this customer,
+    // not "not implemented"). A fresh customer id with no rail_identities
+    // row is the routine 5xx-until-linked case §3d designs for, not an
+    // error condition.
     const eventId = `evt_${randomUUID()}`;
+    const customerId = `cus_${randomUUID()}`;
 
     const { payload, signature } = signedFixture(
       baseEvent({
         id: eventId,
         type: 'invoice.paid',
         created: 1_700_000_000,
-        data: { object: { billing_reason: 'subscription_create', total: 0 } },
+        data: { object: { billing_reason: 'subscription_create', total: 0, customer: customerId } },
       }),
     );
 
@@ -319,7 +326,7 @@ describe('POST /webhooks/stripe (ADR-0009 §3h — full route: verify, normalize
     const response = await postSignedWebhook(app, payload, signature);
 
     expect(response.status).toBe(500);
-    expect(response.body).toEqual({ error: 'member_linkage_not_implemented' });
+    expect(response.body).toEqual({ error: 'unlinked_customer' });
     expect(loggerStream.parsedLines().some((line) => line['level'] === 50)).toBe(true);
 
     const inboxRows = await testDb.db
