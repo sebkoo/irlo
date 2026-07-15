@@ -81,12 +81,16 @@ type MinimalSubscriptionDiff = Pick<Stripe.Subscription, 'cancel_at_period_end'>
 };
 
 /**
- * `Stripe.Checkout.Session.customer` is typed for the (expandable) REST
- * response, so it's a `string | Customer | DeletedCustomer | null` even
- * though webhook payloads never carry an expanded object. Narrows to just
- * the id, honestly handling the object shape rather than asserting it away.
+ * Shared shape of every Stripe resource's expandable `customer` field
+ * (`Checkout.Session.customer`, `Invoice.customer`, ...) — typed for the
+ * (expandable) REST response, so it's a `string | Customer |
+ * DeletedCustomer | null` even though webhook payloads never carry an
+ * expanded object. Exported for reuse at the route (Invoice.customer,
+ * ADR-0011 slice C) — one narrowing function, not one per call site.
  */
-function rawCustomerId(customer: Stripe.Checkout.Session['customer']): string | null {
+export function stripeCustomerId(
+  customer: string | Stripe.Customer | Stripe.DeletedCustomer | null,
+): string | null {
   if (customer === null) return null;
   /* c8 ignore next -- unreachable via a real webhook delivery: Stripe's
    * expand param has no webhook counterpart, so `customer` is always the
@@ -244,7 +248,7 @@ export function normalizeStripeEvent(event: StripeNormalizerInput): NormalizedSt
           // string in a real payload — the object/DeletedCustomer arms
           // only exist because Stripe.Checkout.Session's type is shared
           // with the (expandable) REST response.
-          customer: rawCustomerId(event.data.object.customer),
+          customer: stripeCustomerId(event.data.object.customer),
           clientReferenceId: event.data.object.client_reference_id,
         },
       };

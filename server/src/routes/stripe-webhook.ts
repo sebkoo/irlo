@@ -1,13 +1,16 @@
 import type { FastifyInstance } from 'fastify';
 
 import type { Db } from '../db/client.js';
+import { createRailIdentitiesRepository } from '../db/repositories/rail-identities.js';
 import { consumeContextEvent } from '../payments/consume-context-event.js';
 import type { ConsumeContextEventResult } from '../payments/consume-context-event.js';
+import { consumeLinkageEvent } from '../payments/consume-linkage-event.js';
+import { consumePurchaseEvent } from '../payments/consume-purchase-event.js';
 import { consumeSubscriptionEconomicEvent } from '../payments/consume-subscription-economic-event.js';
 import type { ConsumeSubscriptionEconomicEventResult } from '../payments/consume-subscription-economic-event.js';
-import { consumeLinkageEvent } from '../payments/consume-linkage-event.js';
+import { extractProductIdFromInvoice } from '../payments/stripe/extract-product-id.js';
 import { extractSubscriptionIdFromInvoice } from '../payments/stripe/extract-subscription-id.js';
-import { normalizeStripeEvent } from '../payments/stripe/normalize-event.js';
+import { normalizeStripeEvent, stripeCustomerId } from '../payments/stripe/normalize-event.js';
 import { verifyStripeWebhookEvent } from '../payments/stripe/verify-webhook.js';
 
 export interface RegisterStripeWebhookRouteOptions {
@@ -33,9 +36,15 @@ export interface RegisterStripeWebhookRouteOptions {
  *   alerted rather than retried, not escalated to 5xx.
  * - 400: signature verification failure — not transient, redelivery won't
  *   help.
- * - 5xx: `no_matching_generation` (Stripe's delivery ordering isn't
- *   guaranteed — §3b — so redelivery genuinely may resolve this once the
- *   generation-creating event lands) and any uncaught infra-level error
+ * - 5xx: `no_matching_generation` and `unlinked_customer` — ADR-0009 §3h's
+ *   original case (b), and case (c) added by ADR-0011 §3d/§3f (amending
+ *   ADR-0009 §3h) with the identical reasoning: `purchase_event`'s customer
+ *   resolves to no member
+ *   via `resolveMemberByRailIdentity` (a resolver miss, not a data error —
+ *   ADR-0011 §3d's decided "5xx-until-linked, parking rejected"), and
+ *   Stripe's own retry schedule genuinely may resolve it once the
+ *   `checkout.session.completed` backstop (or the primary checkout-endpoint
+ *   path, slice D) lands the link. Also 5xx: any uncaught infra-level error
  *   from a consumer function (a genuine DB/connection fault — Fastify's
  *   default error handler responds 500 for an unhandled rejection, which
  *   is exactly the §3h-correct status for this case, so no explicit
@@ -46,10 +55,6 @@ export interface RegisterStripeWebhookRouteOptions {
  * transitions (§3h's 2xx+alert case): these ARE potentially actionable
  * once their blocker clears, just not today, so Stripe's retry schedule is
  * left running rather than told to stop:
- * - `purchase_event` (`customer.subscription.created` + `invoice.paid`
- *   `subscription_create`): blocked on member↔customer linkage, which does
- *   not exist yet (`NEXT_STEPS.md` — ADR-0011, a named escalation-gated
- *   design item, Stage 3).
  * - `subscription_event` other than `renewed` (i.e. `renewal_failed`,
  *   `grace_exhausted`, `period_expired`): no consumer function exists yet
  *   for these state-only transitions (`NEXT_STEPS.md` — "left to a
@@ -68,6 +73,8 @@ export function registerStripeWebhookRoute(
   db: Db['db'],
   options: RegisterStripeWebhookRouteOptions,
 ): void {
+  const railIdentities = createRailIdentitiesRepository(db);
+
   app.register((scoped) => {
     // Raw body preserved exactly, as a Buffer — Stripe's HMAC signature is
     // computed over the undecoded bytes, not over a JSON-reparsed object
@@ -148,14 +155,81 @@ export function registerStripeWebhookRoute(
       }
 
       if (normalized.kind === 'purchase_event') {
-        // Blocked on member<->customer linkage (ADR-0011) — see doc
-        // comment above. 5xx: potentially actionable once linkage lands,
-        // not a permanent domain gap, so Stripe's retry schedule stays on.
-        request.log.error(
-          { eventId: event.id, eventType: event.type },
-          'stripe webhook: purchase_event blocked on member<->customer linkage (ADR-0011)',
-        );
-        return reply.code(500).send({ error: 'member_linkage_not_implemented' });
+        /* c8 ignore next 7 -- unreachable: today purchase_event only ever
+         * originates from invoice.paid (billing_reason=subscription_create)
+         * — see normalize-event.ts's own §3b coverage comment. A real
+         * routing bug, not a known stub, if this ever fires. Same
+         * defensive shape as the context_event/renewed guards above/below. */
+        if (event.type !== 'invoice.paid') {
+          request.log.error(
+            { eventId: event.id, eventType: event.type },
+            'stripe webhook: purchase_event from an unexpected Stripe event type',
+          );
+          return reply.code(500).send({ error: 'unexpected_purchase_event_source' });
+        }
+
+        const invoice = event.data.object;
+
+        // ADR-0009 §3h case (c) (added by ADR-0011 §3d/§3f): resolve the member first — a resolver
+        // miss is a routine 5xx-until-linked outcome, not an error worth
+        // spending the extraction work below on.
+        const externalId = stripeCustomerId(invoice.customer);
+        const memberId =
+          externalId === null
+            ? undefined
+            : await railIdentities.resolveMemberByRailIdentity('stripe', externalId);
+
+        if (memberId === undefined) {
+          request.log.error(
+            { eventId: event.id, eventType: event.type },
+            'stripe webhook: purchase_event customer has no linked member (ADR-0009 §3h case (c), ADR-0011 §3d/§3f)',
+          );
+          return reply.code(500).send({ error: 'unlinked_customer' });
+        }
+
+        const routingKey = extractSubscriptionIdFromInvoice(invoice);
+        if (!routingKey.ok) {
+          request.log.error(
+            { eventId: event.id, eventType: event.type },
+            'stripe webhook: invoice has no resolvable subscription linkage',
+          );
+          return reply.code(500).send({ error: 'routing_key_unresolved' });
+        }
+
+        const productIdResult = extractProductIdFromInvoice(invoice);
+        /* c8 ignore next 7 -- unreachable: a subscription_create invoice
+         * (the only billing_reason that normalizes to purchase_event)
+         * always carries at least one priced line item by Stripe's own
+         * object model (extract-product-id.ts's own doc comment) — a real
+         * data-integrity fault, not a known stub, if this ever fires. */
+        if (!productIdResult.ok) {
+          request.log.error(
+            { eventId: event.id, eventType: event.type },
+            'stripe webhook: invoice has no resolvable productId',
+          );
+          return reply.code(500).send({ error: 'product_id_unresolved' });
+        }
+
+        const result = await consumePurchaseEvent(db, {
+          source: 'stripe',
+          eventId: event.id,
+          eventType: event.type,
+          payload: event,
+          effectiveAt,
+          provider: 'stripe',
+          providerSubscriptionId: routingKey.providerSubscriptionId,
+          memberId,
+          event: normalized.event,
+          productId: productIdResult.productId,
+          invoiceOrTransactionId: invoice.id,
+          periodEnd: new Date(invoice.period_end * 1000),
+          periodStart: new Date(invoice.period_start * 1000),
+        });
+        // ADR-0011 §3g: every ConsumePurchaseEventResult outcome
+        // (generation_created | no_op_live | duplicate) is 2xx — unlike
+        // the context/subscription-economic consumers below, this result
+        // type has no no_matching_generation-shaped 5xx case.
+        return reply.code(200).send({ outcome: result.outcome });
       }
 
       if (normalized.kind === 'context_event') {
