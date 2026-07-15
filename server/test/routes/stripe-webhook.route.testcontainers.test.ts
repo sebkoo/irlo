@@ -408,6 +408,101 @@ describe('POST /webhooks/stripe (ADR-0009 §3h — full route: verify, normalize
     await app.close();
   });
 
+  it('the flagship out-of-order pair: an unlinked purchase 5xxes, checkout.session.completed links it, the SAME purchase envelope re-posted then succeeds (ADR-0011 §3g item 4 — the ADR-0011 centerpiece claim, executable)', async () => {
+    const purchaseEventId = `evt_${randomUUID()}`;
+    const linkageEventId = `evt_${randomUUID()}`;
+    const invoiceId = `in_${randomUUID()}`;
+    const customerId = `cus_${randomUUID()}`;
+    const providerSubscriptionId = `sub_${randomUUID()}`;
+
+    const purchaseFixture = signedFixture(
+      baseEvent({
+        id: purchaseEventId,
+        type: 'invoice.paid',
+        created: 1_700_000_000,
+        data: {
+          object: {
+            id: invoiceId,
+            billing_reason: 'subscription_create',
+            total: 999,
+            customer: customerId,
+            period_start: 1_767_225_600,
+            period_end: 1_769_904_000,
+            parent: { subscription_details: { subscription: providerSubscriptionId } },
+            lines: { data: [{ pricing: { price_details: { price: 'price_monthly' } } }] },
+          },
+        },
+      }),
+    );
+
+    const app = buildTestApp(new MemoryLogStream());
+    await app.ready();
+
+    // 1. The purchase arrives first — no link exists yet. Stripe's own
+    // retry schedule is what's supposed to resolve this (§3d), not a
+    // parking mechanism.
+    const firstAttempt = await postSignedWebhook(
+      app,
+      purchaseFixture.payload,
+      purchaseFixture.signature,
+    );
+    expect(firstAttempt.status).toBe(500);
+    expect(firstAttempt.body).toEqual({ error: 'unlinked_customer' });
+
+    const generationRowsBeforeLink = await testDb.db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.providerSubscriptionId, providerSubscriptionId));
+    expect(generationRowsBeforeLink).toHaveLength(0);
+
+    // 2. checkout.session.completed links the customer to the member —
+    // the backstop path (ADR-0011 §3b).
+    const linkageFixture = signedFixture(
+      baseEvent({
+        id: linkageEventId,
+        type: 'checkout.session.completed',
+        created: 1_700_000_100,
+        data: { object: { customer: customerId, client_reference_id: memberId } },
+      }),
+    );
+    const linkageResponse = await postSignedWebhook(
+      app,
+      linkageFixture.payload,
+      linkageFixture.signature,
+    );
+    expect(linkageResponse.status).toBe(200);
+    expect(linkageResponse.body).toEqual({ outcome: 'linked' });
+
+    // 3. The SAME purchase envelope re-posted (Stripe redelivery
+    // semantics on its own retry schedule) now resolves the member and
+    // succeeds — the flagship claim: no parking, no replay machinery,
+    // just the provider's own at-least-once retry landing after the
+    // link exists.
+    const redelivery = await postSignedWebhook(
+      app,
+      purchaseFixture.payload,
+      purchaseFixture.signature,
+    );
+    expect(redelivery.status).toBe(200);
+    expect(redelivery.body).toEqual({ outcome: 'generation_created' });
+
+    const generationRowsAfterRetry = await testDb.db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.providerSubscriptionId, providerSubscriptionId));
+    expect(generationRowsAfterRetry).toHaveLength(1);
+    expect(generationRowsAfterRetry[0]?.memberId).toBe(memberId);
+
+    const inboxRows = await testDb.db
+      .select()
+      .from(paymentEvents)
+      .where(and(eq(paymentEvents.source, 'stripe'), eq(paymentEvents.eventId, purchaseEventId)));
+    expect(inboxRows).toHaveLength(1);
+    expect(inboxRows[0]?.disposition).toBe('applied');
+
+    await app.close();
+  });
+
   it('checkout.session.completed with a fresh customer creates a link — 200, linked, one inbox row (ADR-0011 §3b)', async () => {
     const eventId = `evt_${randomUUID()}`;
     const customerId = `cus_${randomUUID()}`;
