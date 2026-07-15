@@ -203,8 +203,10 @@ labeled in [Start here](#start-here); the trail from decision to code is
   macOS 26 (XcodeGen → XCTest/XCUITest on a dynamically-resolved simulator),
   Codecov flags `server`/`ios`.
 - **Observability as a deliverable:** pino structured logs live on the
-  `/health` endpoint onward; OpenTelemetry traces next
-  ([ADR-0003](docs/adr/0003-backend-platform.md), planned).
+  `/health` endpoint onward; OpenTelemetry traces land alongside them —
+  `buildApp`'s optional `tracing` seam stamps `traceId`/`spanId` on every
+  request log line, asserted through an in-memory span exporter
+  ([ADR-0003](docs/adr/0003-backend-platform.md)).
 - **Atomic, explained commits:** Conventional Commits 1.0; bodies explain *why*;
   history reads as a plan, not an accident — inspect `git log`.
 
@@ -230,8 +232,8 @@ demonstrate.
 
 | Horizon | Work |
 |---|---|
-| **Now** | Stage 0 done: verified name · toolchain · canary-tested monorepo · CI · AI harness · design record (ADR 0001–0009). Server foundation live: `/health` · env config · logging · dockerized dev env · Drizzle + Testcontainers. Landed: ADR-0009 entitlement domain + Stripe event consumers + webhook endpoint + ADR-0011 member↔rail-identity linkage (design, `rail_identities` repository, the linkage consumer, and purchase-branch retirement — slices A–C) ([Start here](#start-here)) |
-| **Next** | ADR-0011 slice D — the checkout-session endpoint (the missing link creator; real purchases 5xx until it lands) · OpenTelemetry bootstrap · admission & waitlist (US-01/02) — order of record in [`NEXT_STEPS.md`](NEXT_STEPS.md) |
+| **Now** | Stage 0 done: verified name · toolchain · canary-tested monorepo · CI · AI harness · design record (ADR 0001–0009). Server foundation live: `/health` · env config · logging · OpenTelemetry tracing (traceId/spanId in request logs) · dockerized dev env · Drizzle + Testcontainers. Landed: ADR-0009 entitlement domain + Stripe event consumers + webhook endpoint + ADR-0011 member↔rail-identity linkage (design, `rail_identities` repository, the linkage consumer, and purchase-branch retirement — slices A–C) ([Start here](#start-here)) |
+| **Next** | ADR-0011 slice D — the checkout-session endpoint (the missing link creator; real purchases 5xx until it lands) · admission & waitlist (US-01/02) — order of record in [`NEXT_STEPS.md`](NEXT_STEPS.md) |
 | **Later** | App Store rail → reconciliation → Deck feed → chat gateway → iOS flows → web checkout → RN screen → pgvector ranking. The 30-second demo GIF ships with the first user-facing milestone (v0.1.0) |
 
 Full sequence with commit-level granularity: [`NEXT_STEPS.md`](NEXT_STEPS.md).

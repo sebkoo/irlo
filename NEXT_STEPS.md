@@ -23,7 +23,7 @@ endpoints; `/adr-new` when a decision is missing.
 | C13–C15 | `/health` endpoint triplet on Fastify app factory (done) | failing contract test → typed route → app-factory refactor; first supertest |
 | C16 | zod-parsed env config (12-factor) (done) | `.env.example` becomes the tested contract |
 | C17 | pino structured logging (done) | request IDs; log schema doc |
-| C18 | OpenTelemetry bootstrap | trace context (traceId/spanId) |
+| C18 | OpenTelemetry bootstrap (done) | trace context (traceId/spanId); `startTracing` seam + `buildApp`'s optional `tracing` option — no server entrypoint wires it into a running process yet, mirroring C16/C20's own staged env-var rollout |
 | C19 | docker-compose dev env (Postgres + Redis) (done — runtime-verified: `make dev-up` → both containers healthy → `make dev-down`) | Local runtime is colima, not Docker Desktop (blocked on this managed machine); see `docs/runbook.md` #Local dev environment |
 | C20 | DATABASE_URL env contract + Drizzle client factory (done) | optional until Stage 2 boot-wires the pool |
 | C21–C22 | Drizzle schema/migrations (Testcontainers-verified) + members repository triplet | first tables: members + the ADR-0009 truth logs/projections |

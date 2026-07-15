@@ -1,4 +1,4 @@
-# Server log schema (C17)
+# Server log schema (C17, C18)
 
 The server logs structured JSON lines via Fastify's built-in pino integration
 (`fastify` bundles `pino` — no separate dependency), configured from
@@ -22,13 +22,23 @@ future server-bootstrap entrypoint passes `process.stdout`.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `reqId` | string | per-request id, Fastify's own monotonically-increasing default (`req-1`, `req-2`, ...) — not yet a distributed trace id |
+| `reqId` | string | per-request id, Fastify's own monotonically-increasing default (`req-1`, `req-2`, ...) — scoped to a single process, not a distributed trace |
 | `req` | object | method, url, version, host, remoteAddress, remotePort (on the "incoming request" line) |
 | `res` | object | statusCode (on the "request completed" line) |
 | `responseTime` | number | ms, on the "request completed" line |
 
-## Not yet present
+## Trace-context fields (C18, when `buildApp`'s `tracing` option is set)
 
-`traceId` / `spanId` (OpenTelemetry trace context) arrive with C18 — this
-schema covers pino only. Until then, `reqId` is the sole correlation key and
-is scoped to a single process, not a distributed trace.
+| Field | Type | Meaning |
+|---|---|---|
+| `traceId` | string | OpenTelemetry trace id for the request's span, on the "request completed" line onward |
+| `spanId` | string | OpenTelemetry span id for the per-request span |
+
+`server/src/observability/tracing.ts`'s `startTracing` bootstraps the
+`NodeTracerProvider`; `buildApp` starts a span per request in an `onRequest`
+hook and reassigns both `request.log` and `reply.log` to a child logger
+carrying `traceId`/`spanId` — Fastify's own "request completed" line reads
+`reply.log`, a separate snapshot taken at `Reply` construction, not
+`request.log`. Absent by default: existing callers that don't pass a
+`tracing` option see no trace-context fields, matching the "Not yet present"
+behavior this schema previously documented.
