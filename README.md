@@ -232,14 +232,14 @@ demonstrate.
 
 | Horizon | Work |
 |---|---|
-| **Now** | Stage 0 complete. Stage 1 server foundation live. Stage 2 entitlements and Stage 3 Stripe rail landed through ADR-0011 slice C — see the generated status below ([Start here](#start-here)) |
+| **Now** | Stage 0 complete. Stage 1 server foundation live. Stage 2 entitlement service + reducer and Stage 3 Stripe rail landed through ADR-0011 slice C — see the generated status below ([Start here](#start-here)) |
 | **Next** | ADR-0011 slice D (checkout-session endpoint; real purchases 5xx until it lands) · admission & waitlist (US-01/02) — order of record in [`NEXT_STEPS.md`](NEXT_STEPS.md) |
 | **Later** | App Store rail → reconciliation → Deck feed → chat gateway → iOS flows → web checkout → RN screen → pgvector ranking. The 30-second demo GIF ships with the first user-facing milestone (v0.1.0) |
 
-Regenerated from [`NEXT_STEPS.md`](NEXT_STEPS.md) every commit by
-`make docs-progress`; a stale block fails CI (`make lint` / `make test-ci`
-diff the regenerated output against this file). Not "real-time" — a
-committed file can't be live — but it can't silently drift out of date
+Regenerate with `make docs-progress`; CI runs `gen-progress.mjs --check`
+and fails the build if this block doesn't match what
+[`NEXT_STEPS.md`](NEXT_STEPS.md) would currently produce. Not "real-time" —
+a committed file can't be live — but it can't silently drift out of date
 either. Legend: ✅ shipped & tested on `main` · 🚧 in progress · 📋 planned.
 
 <!-- progress:begin -->
