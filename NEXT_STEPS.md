@@ -237,6 +237,17 @@ still 5xxes as `unlinked_customer` until D lands.
 Stage 4 note: Apple token minting/first-submission flows consume the same table (ADR-0011
 §3e); no fresh linkage design pause needed there.
 
+**Slice A done (2026-07-15, local only, not yet pushed):** `rail_identities` schema +
+migration + the three-operation repository triplet (`createLink`,
+`resolveMemberByRailIdentity`, `getLatestIdentity`) landed, each as a genuine red→green
+pair, Testcontainers-verified. Two code-reviewer passes (Opus 4.8, xhigh): the first
+flagged an untested `resolveMemberByRailIdentity` provider predicate (a real
+misattribution-of-money risk given `UNIQUE(provider, external_id)` allows the same raw
+external id under two providers) and a missed bare `§3g` qualifier in ADR-0011 §3f; both
+fixed and folded into their originating commits via fixup+autosquash, re-reviewed clean.
+Server suite: 100% statement/branch/function/line coverage. **Next:** slice (B) — the
+linkage consumer.
+
 ## Stage 4 — App Store rail (≈C43–C49) — US-07, US-08 (server half)
 
 - JWS verification (App Store Server API v2) with fixture keys · Server
