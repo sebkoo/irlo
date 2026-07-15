@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { transition } from '../src/domain/admission-transition.js';
+import { applySubmission, transition } from '../src/domain/admission-transition.js';
 
 const COOLDOWN = new Date('2026-08-01T00:00:00Z');
 
@@ -365,6 +365,77 @@ describe('admission transition function (ADR-0009 §3c, C30)', () => {
           ok: false,
           error: { code: 'invalid_transition', state, eventType: 'withdraw' },
         });
+      },
+    );
+  });
+});
+
+describe('applySubmission (ADR-0009 §3c, C31 — generation-spawning entry, mirrors applyPurchase)', () => {
+  it('a first-ever submission with no prior generation creates generation 1 at submitted', () => {
+    const result = applySubmission(null, { crewOpen: true, cooldownElapsed: true });
+
+    expect(result).toEqual({
+      ok: true,
+      aggregate: { state: 'submitted', cooldownUntil: null },
+      isNewGeneration: true,
+    });
+  });
+
+  it('a closed crew blocks submission even with no prior generation', () => {
+    const result = applySubmission(null, { crewOpen: false, cooldownElapsed: true });
+
+    expect(result).toEqual({ ok: false, error: { code: 'crew_not_open' } });
+  });
+
+  it('crew_not_open is checked before already_applied — a closed crew blocks even a colliding live generation', () => {
+    const result = applySubmission(
+      { state: 'under_review', cooldownUntil: null },
+      { crewOpen: false, cooldownElapsed: true },
+    );
+
+    expect(result).toEqual({ ok: false, error: { code: 'crew_not_open' } });
+  });
+
+  describe('a live (non-terminal) generation already exists — double-admission attempt', () => {
+    it.each(['draft', 'submitted', 'under_review', 'waitlisted', 'accepted'] as const)(
+      'blocks submission with a typed already_applied error while the latest generation is %s',
+      (state) => {
+        const result = applySubmission(
+          { state, cooldownUntil: null },
+          { crewOpen: true, cooldownElapsed: true },
+        );
+
+        expect(result).toEqual({ ok: false, error: { code: 'already_applied' } });
+      },
+    );
+  });
+
+  describe('reapply after a terminal generation (I6-style absorption; ADR-0009 §3b refinement 8)', () => {
+    it.each(['member', 'rejected', 'withdrawn'] as const)(
+      'spawns a fresh generation at submitted once cooldown has elapsed, from a terminal %s generation',
+      (state) => {
+        const result = applySubmission(
+          { state, cooldownUntil: null },
+          { crewOpen: true, cooldownElapsed: true },
+        );
+
+        expect(result).toEqual({
+          ok: true,
+          aggregate: { state: 'submitted', cooldownUntil: null },
+          isNewGeneration: true,
+        });
+      },
+    );
+
+    it.each(['member', 'rejected', 'withdrawn'] as const)(
+      'blocks reapply with a typed cooldown_active error while cooldown has not elapsed, from a terminal %s generation',
+      (state) => {
+        const result = applySubmission(
+          { state, cooldownUntil: COOLDOWN },
+          { crewOpen: true, cooldownElapsed: false },
+        );
+
+        expect(result).toEqual({ ok: false, error: { code: 'cooldown_active' } });
       },
     );
   });
