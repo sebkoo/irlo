@@ -298,8 +298,38 @@ test('renderProgressBlock: emoji vocabulary, no percentages, placeholder for emp
   assert.match(block, /- 🚧 \*\*C21–C22\*\* — migrations/);
   assert.match(block, /- 📋 \*\*C90\*\* — future work/);
   assert.match(block, /### Stage 5 — Reconciliation \(≈C50–C52\)/);
-  assert.match(block, /no.*items tracked yet/i);
+  assert.match(block, /no slice-level items yet — see the stage heading in NEXT_STEPS\.md/i);
   assert.doesNotMatch(block, /%/, 'no percentages or progress bars, per CLAUDE.md');
+});
+
+test('renderProgressBlock: items over the fold threshold collapse into <details>, short ones stay inline', () => {
+  const longName = 'a'.repeat(120) + ' ' + 'b'.repeat(120); // 241 chars, well over 200
+  const shortName = 'a short item name well under the fold threshold';
+  const block = renderProgressBlock([
+    {
+      title: 'Stage 2 — Entitlements & admission (≈C23–C36) — US-01, US-02',
+      items: [
+        { id: 'C23', name: longName, state: 'done' },
+        { id: 'C24–C27', name: shortName, state: 'done' },
+      ],
+    },
+  ]);
+  // short item: plain inline row, no <details>
+  assert.match(block, new RegExp(`- ✅ \\*\\*C24–C27\\*\\* — ${shortName}$`, 'm'));
+  // long item: collapsed behind <details><summary>, full text still present for search/expand
+  assert.match(block, /- ✅ \*\*C23\*\* — <details><summary>/);
+  assert.ok(block.includes(longName), 'full text is preserved inside <details>, not truncated away');
+  const summaryMatch = /<summary>(.*?)<\/summary>/.exec(block);
+  assert.ok(summaryMatch, 'summary tag present');
+  assert.ok(summaryMatch[1].length < longName.length, 'summary is shorter than the full name');
+});
+
+test('real NEXT_STEPS.md opens the ledger with a completed Stage 0', () => {
+  const source = readFileSync(join(repoRoot, 'NEXT_STEPS.md'), 'utf-8');
+  const { stages } = parseNextSteps(source);
+  assert.match(stages[0].title, /^Stage 0 —/);
+  assert.equal(stages[0].items.length, 1);
+  assert.equal(stages[0].items[0].state, 'done');
 });
 
 test('spliceReadme: replaces content strictly between the marker comments', () => {
