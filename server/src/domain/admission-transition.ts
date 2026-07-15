@@ -156,3 +156,71 @@ export function transition(aggregate: AdmissionAggregate, event: AdmissionEvent)
       return invalid(state, event.type);
   }
 }
+
+const ADMISSION_TERMINALS: readonly AdmissionState[] = ['member', 'rejected', 'withdrawn'];
+
+/**
+ * ADR-0009 §3c's `submit` guards, evaluated externally and passed in —
+ * `crewOpen` (no crews table exists yet; Stage 6 wires the real capacity
+ * check) and `cooldownElapsed` (computed by the caller against the wall
+ * clock from the latest generation's `cooldownUntil`, mirroring
+ * subscription-transition.ts's caller-supplied effectiveAt/highWater — this
+ * pure function never touches the clock directly).
+ */
+export interface SubmissionGuards {
+  crewOpen: boolean;
+  cooldownElapsed: boolean;
+}
+
+export type SubmissionError =
+  | { code: 'crew_not_open' }
+  /** The "no live application for (member, crew)" guard — a double-admission attempt. */
+  | { code: 'already_applied' }
+  | { code: 'cooldown_active' };
+
+export interface SubmissionResult {
+  ok: true;
+  aggregate: AdmissionAggregate;
+  isNewGeneration: true;
+}
+
+export type ApplySubmissionResult = SubmissionResult | { ok: false; error: SubmissionError };
+
+/**
+ * ADR-0009 §3c's `submit` event / §3b refinement 8's reapply rule,
+ * mirroring `applyPurchase`'s generation-spawn decision. Unlike a purchase
+ * signal's benign at-least-once redelivery (`no_op_live`), a submit against
+ * an already-live generation is a genuine user-initiated conflict, not a
+ * provider replay — so it's a typed error here, never a silent no-op:
+ * "double-admission attempt is a typed domain error."
+ *
+ * `latestGeneration === null` (never applied to this crew) and a terminal
+ * `latestGeneration` (I6-style absorption: member/rejected/withdrawn never
+ * resurrect) both spawn a fresh generation directly at `submitted` —
+ * `draft` is bypassed the same way `applyPurchase` skips any pre-trial
+ * state, since §3c's event table has no `[*] -> draft` event, only
+ * `submit: draft -> submitted`.
+ */
+export function applySubmission(
+  latestGeneration: AdmissionAggregate | null,
+  guards: SubmissionGuards,
+): ApplySubmissionResult {
+  if (!guards.crewOpen) return { ok: false, error: { code: 'crew_not_open' } };
+
+  const isTerminal =
+    latestGeneration !== null && ADMISSION_TERMINALS.includes(latestGeneration.state);
+
+  if (latestGeneration !== null && !isTerminal) {
+    return { ok: false, error: { code: 'already_applied' } };
+  }
+
+  if (isTerminal && !guards.cooldownElapsed) {
+    return { ok: false, error: { code: 'cooldown_active' } };
+  }
+
+  return {
+    ok: true,
+    aggregate: { state: 'submitted', cooldownUntil: null },
+    isNewGeneration: true,
+  };
+}
