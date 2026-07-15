@@ -199,11 +199,14 @@ it lands: the AI is the typist, the engineer stays accountable. The workflow
 itself is versioned, auditable engineering — prompt, context, harness, and
 loop engineering: a <300-line
 [`CLAUDE.md`](CLAUDE.md) constitution, eight encoded slash-command workflows,
-format/lint/test hooks, a code-reviewer subagent whose findings land as their
-own commits, and a release-blocking [eval checklist](docs/ai/evals.md) for the
-harness itself. [`docs/ai/methodology.md`](docs/ai/methodology.md) discloses
-models and effort per work type — including seven recorded self-enforcement
-cases where the harness (or the human) caught the tool cutting a corner. That
+`make test-ci` gates (typecheck · lint · format · coverage · mermaid render)
+enforced before every push — plus convenience-only, fail-open session hooks
+that format-on-edit but never block — a code-reviewer subagent whose findings
+land as their own commits, and a release-blocking [eval
+checklist](docs/ai/evals.md) for the harness itself.
+[`docs/ai/methodology.md`](docs/ai/methodology.md) discloses models and
+effort per work type — including eight recorded self-enforcement cases where
+the harness (or the human) caught the tool cutting a corner. That
 governance isn't an apology; it's one of the things this repo is built to
 demonstrate.
 
