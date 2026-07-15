@@ -20,6 +20,12 @@ export const serverEnvSchema = z.object({
    * required, mirroring DATABASE_URL's own staged rollout above.
    */
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  /**
+   * OTLP/HTTP collector endpoint for OpenTelemetry traces (C18, ADR-0003) —
+   * optional until a server entrypoint boot-wires `startTracing` into
+   * `buildApp`, mirroring DATABASE_URL's own staged rollout above.
+   */
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
