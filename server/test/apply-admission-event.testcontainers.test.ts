@@ -308,4 +308,42 @@ describe('applyAdmissionEvent (ADR-0009 §3c per-generation events, C33)', () =>
 
     expect(result).toEqual({ outcome: 'not_found' });
   });
+
+  it('I9 — the audit row records the actor/reasonCode embedded in a decision/withdraw event, not a mismatched top-level input (single source of truth for the append-only log)', async () => {
+    const application = await seedApplication('under_review');
+
+    await applyAdmissionEvent(testDb.db, {
+      applicationId: application.id,
+      event: { type: 'decision', outcome: 'accept', actor: 'reviewer:embedded', reasonCode: 'fit' },
+      // Deliberately mismatched — a caller bug (or a future route bug) must
+      // not be able to make the append-only log disagree with the domain
+      // event it's supposedly auditing.
+      actor: 'reviewer:mismatched',
+      reasonCode: 'wrong_reason',
+    });
+
+    const [row] = await testDb.db
+      .select()
+      .from(admissionEvents)
+      .where(eq(admissionEvents.applicationId, application.id));
+    expect(row?.actor).toBe('reviewer:embedded');
+    expect(row?.reasonCode).toBe('fit');
+  });
+
+  it("I9 — a withdraw event's embedded actor is what gets audited, not a mismatched top-level input", async () => {
+    const application = await seedApplication('submitted');
+
+    await applyAdmissionEvent(testDb.db, {
+      applicationId: application.id,
+      event: { type: 'withdraw', actor: 'member:embedded' },
+      actor: 'member:mismatched',
+      reasonCode: null,
+    });
+
+    const [row] = await testDb.db
+      .select()
+      .from(admissionEvents)
+      .where(eq(admissionEvents.applicationId, application.id));
+    expect(row?.actor).toBe('member:embedded');
+  });
 });
