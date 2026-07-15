@@ -172,7 +172,7 @@ test('synthetic: a stage with zero tracked items still appears in the output', (
 });
 
 test('malformed: unparseable stage header attempt is a loud, line-numbered error', () => {
-  const fixture = `## Stage 3: Bad Colon Instead Of Em-Dash\n\n- C1 something\n`;
+  const fixture = `## Stage 3: Bad Colon Instead Of Em-Dash\n`;
   assert.throws(
     () => parseNextSteps(fixture),
     (err) => {
