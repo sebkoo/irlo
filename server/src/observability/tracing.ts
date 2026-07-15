@@ -25,6 +25,16 @@ export interface Tracing {
 }
 
 /**
+ * Appends the OTLP/HTTP traces resource path (spec: OTEL_EXPORTER_OTLP_ENDPOINT
+ * is a base URL, the exporter is responsible for the per-signal path) —
+ * required because passing `url` explicitly to OTLPTraceExporter bypasses
+ * its own env-derived path-appending and is used verbatim otherwise.
+ */
+export function tracesEndpointFrom(otlpEndpoint: string): string {
+  return `${otlpEndpoint.replace(/\/+$/, '')}/v1/traces`;
+}
+
+/**
  * Bootstraps a NodeTracerProvider, or returns undefined (noop/off) when
  * neither a spanExporter nor an otlpEndpoint is given — the default for
  * every existing buildApp caller, so current suites stay unaffected.
@@ -34,7 +44,7 @@ export function startTracing(options: StartTracingOptions): Tracing | undefined 
     options.spanExporter ??
     (options.otlpEndpoint === undefined
       ? undefined
-      : new OTLPTraceExporter({ url: options.otlpEndpoint }));
+      : new OTLPTraceExporter({ url: tracesEndpointFrom(options.otlpEndpoint) }));
 
   if (exporter === undefined) return undefined;
 

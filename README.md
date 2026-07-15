@@ -204,8 +204,8 @@ labeled in [Start here](#start-here); the trail from decision to code is
   Codecov flags `server`/`ios`.
 - **Observability as a deliverable:** pino structured logs live on the
   `/health` endpoint onward; OpenTelemetry traces land alongside them —
-  `buildApp`'s optional `tracing` seam stamps `traceId`/`spanId` on every
-  request log line, asserted through an in-memory span exporter
+  `buildApp`'s optional `tracing` seam stamps `traceId`/`spanId` on each
+  request's completed log line, asserted through an in-memory span exporter
   ([ADR-0003](docs/adr/0003-backend-platform.md)).
 - **Atomic, explained commits:** Conventional Commits 1.0; bodies explain *why*;
   history reads as a plan, not an accident — inspect `git log`.
