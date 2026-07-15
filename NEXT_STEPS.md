@@ -203,8 +203,39 @@ signature, an unresolvable routing key, an unsupported event type, and a genuine
 killed-connection infra fault followed by a successful identical-redelivery retry.
 `purchase_event` (blocked on ADR-0011 linkage) and non-`renewed` `subscription_event` types
 remain the two logged/alerted 5xx stubs described above — both are real tested branches, not
-stub notes. **Next:** ADR-0011 (member↔customer linkage design, Plan Mode) or C18 (OTel
-bootstrap) — neither needs a fresh judgment escalation beyond the Stage 3 note above.
+stub notes. **Next:** ADR-0011 is designed (block below, 2026-07-14) — next code work is
+linkage slice (A) below or C18 (OTel bootstrap); slices A–D implement what ADR-0011
+specifies, so no fresh judgment escalation, per the same rule the Stage 3 escalation note
+already applies to ADR-0009.
+
+**ADR-0011 accepted (2026-07-14):** member↔rail-identity linkage is designed —
+[ADR-0011](docs/adr/0011-member-rail-identity-linkage.md): one provider-agnostic
+`rail_identities` table (UNIQUE `(provider, external_id)`, member 1:N identities), links
+created on each rail's authenticated channel only (Stripe: the checkout-session endpoint
+commits the link *before* the session exists; `checkout.session.completed` is the
+signed-echo backstop; Apple's server-minted `appAccountToken` at Stage 4), and
+5xx-until-linked retained for out-of-order purchase events (parking in `payment_events`
+rejected — it would shift delivery ownership from Stripe's at-least-once retries onto a
+local replay job, an at-most-once downgrade for money facts). Implementation slices, in
+order:
+
+- **(A)** `rail_identities` migration + repository triplet (Testcontainers) — the eighth
+  ADR-0009-family table; a new Stage 3 migration, not a C21 reopen.
+- **(B)** linkage consumer (`checkout.session.completed` → link upsert + inbox row, per
+  ADR-0011 §3b's outcome table) + `linkage_event` normalizer kind + route dispatch.
+- **(C)** purchase-branch retirement: `resolveMemberByRailIdentity` +
+  `consumePurchaseEvent` wiring; the stub test mutates into the `unlinked_customer` test;
+  ADR-0011 §3g lists the full test-flip set (golden path, out-of-order pair, conflict).
+- **(D)** checkout-session endpoint — the already-planned Stage 3 bullet, now specified:
+  create-or-reuse the Customer and commit the link before creating the session.
+
+**C↔D dependency, stated so nobody misreads post-C as launchable:** slice C's golden path
+is testable with fixture-created links, but production links only exist once D ships —
+after C, the purchase path passes end-to-end in tests while every real-world purchase
+still 5xxes as `unlinked_customer` until D lands.
+
+Stage 4 note: Apple token minting/first-submission flows consume the same table (ADR-0011
+§3e); no fresh linkage design pause needed there.
 
 ## Stage 4 — App Store rail (≈C43–C49) — US-07, US-08 (server half)
 
