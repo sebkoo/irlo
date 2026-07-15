@@ -331,6 +331,85 @@ describe('POST /webhooks/stripe (ADR-0009 §3h — full route: verify, normalize
     await app.close();
   });
 
+  it('checkout.session.completed with a fresh customer creates a link — 200, linked, one inbox row (ADR-0011 §3b)', async () => {
+    const eventId = `evt_${randomUUID()}`;
+    const customerId = `cus_${randomUUID()}`;
+
+    const { payload, signature } = signedFixture(
+      baseEvent({
+        id: eventId,
+        type: 'checkout.session.completed',
+        created: 1_700_000_000,
+        data: { object: { customer: customerId, client_reference_id: memberId } },
+      }),
+    );
+
+    const app = buildTestApp(new MemoryLogStream());
+    await app.ready();
+
+    const response = await postSignedWebhook(app, payload, signature);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ outcome: 'linked' });
+
+    const inboxRows = await testDb.db
+      .select()
+      .from(paymentEvents)
+      .where(and(eq(paymentEvents.source, 'stripe'), eq(paymentEvents.eventId, eventId)));
+    expect(inboxRows).toHaveLength(1);
+
+    await app.close();
+  });
+
+  it('checkout.session.completed conflicting with an existing different-member link — 2xx, alerted, no repoint, no inbox row (ADR-0011 L3)', async () => {
+    const customerId = `cus_${randomUUID()}`;
+    const firstEventId = `evt_${randomUUID()}`;
+    const conflictEventId = `evt_${randomUUID()}`;
+    const otherMemberId = (await createMembersRepository(testDb.db).create()).id;
+
+    const loggerStream = new MemoryLogStream();
+    const app = buildTestApp(loggerStream);
+    await app.ready();
+
+    const first = signedFixture(
+      baseEvent({
+        id: firstEventId,
+        type: 'checkout.session.completed',
+        created: 1_700_000_000,
+        data: { object: { customer: customerId, client_reference_id: memberId } },
+      }),
+    );
+    const firstResponse = await postSignedWebhook(app, first.payload, first.signature);
+    expect(firstResponse.status).toBe(200);
+    expect(firstResponse.body).toEqual({ outcome: 'linked' });
+
+    const conflicting = signedFixture(
+      baseEvent({
+        id: conflictEventId,
+        type: 'checkout.session.completed',
+        created: 1_700_000_001,
+        data: { object: { customer: customerId, client_reference_id: otherMemberId } },
+      }),
+    );
+    const conflictResponse = await postSignedWebhook(
+      app,
+      conflicting.payload,
+      conflicting.signature,
+    );
+
+    expect(conflictResponse.status).toBe(200);
+    expect(conflictResponse.body).toEqual({ outcome: 'conflict' });
+    expect(loggerStream.parsedLines().some((line) => line['level'] === 50)).toBe(true);
+
+    const inboxRows = await testDb.db
+      .select()
+      .from(paymentEvents)
+      .where(and(eq(paymentEvents.source, 'stripe'), eq(paymentEvents.eventId, conflictEventId)));
+    expect(inboxRows).toHaveLength(0);
+
+    await app.close();
+  });
+
   it('a bad signature is rejected with 400, before any DB write', async () => {
     const eventId = `evt_${randomUUID()}`;
     const payload = JSON.stringify(
