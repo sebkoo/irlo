@@ -5,6 +5,7 @@ import { consumeContextEvent } from '../payments/consume-context-event.js';
 import type { ConsumeContextEventResult } from '../payments/consume-context-event.js';
 import { consumeSubscriptionEconomicEvent } from '../payments/consume-subscription-economic-event.js';
 import type { ConsumeSubscriptionEconomicEventResult } from '../payments/consume-subscription-economic-event.js';
+import { consumeLinkageEvent } from '../payments/consume-linkage-event.js';
 import { extractSubscriptionIdFromInvoice } from '../payments/stripe/extract-subscription-id.js';
 import { normalizeStripeEvent } from '../payments/stripe/normalize-event.js';
 import { verifyStripeWebhookEvent } from '../payments/stripe/verify-webhook.js';
@@ -24,7 +25,12 @@ export interface RegisterStripeWebhookRouteOptions {
  *   `unsupported` Stripe event types (genuinely out of catalog scope, not
  *   an error) and the not-yet-implemented dispatch branches below, which
  *   are alerted rather than retried since redelivery on Stripe's own
- *   timescale won't resolve them (see per-branch comments).
+ *   timescale won't resolve them (see per-branch comments). Also 2xx,
+ *   always: every `linkage_event` outcome (ADR-0011 §3b) — `linked` and
+ *   `already_linked` are recorded (`applied`); `conflict`, `member_not_found`,
+ *   and `unattributable` never resolve on redelivery (the identical
+ *   `invalid`-shaped reasoning as the third bullet below), so they're
+ *   alerted rather than retried, not escalated to 5xx.
  * - 400: signature verification failure — not transient, redelivery won't
  *   help.
  * - 5xx: `no_matching_generation` (Stripe's delivery ordering isn't
@@ -107,6 +113,38 @@ export function registerStripeWebhookRoute(
           'stripe webhook: unsupported event type, no-op',
         );
         return reply.code(200).send({ outcome: 'unsupported' });
+      }
+
+      if (normalized.kind === 'linkage_event') {
+        const result = await consumeLinkageEvent(db, {
+          source: 'stripe',
+          eventId: event.id,
+          eventType: event.type,
+          payload: event,
+          effectiveAt,
+          provider: 'stripe',
+          externalId: normalized.event.customer,
+          clientReferenceId: normalized.event.clientReferenceId,
+        });
+
+        if (
+          result.outcome === 'conflict' ||
+          result.outcome === 'member_not_found' ||
+          result.outcome === 'unattributable'
+        ) {
+          // ADR-0011 §3b: none of these three resolve on redelivery — 2xx
+          // so Stripe stops retrying, alerted so an operator investigates.
+          // The alert repeats on every at-least-once duplicate Stripe
+          // sends for `conflict`/`member_not_found` (no inbox row means
+          // layer 1 never dedupes the envelope) — loud is correct for a
+          // fraud-shaped signal (§3f).
+          request.log.error(
+            { eventId: event.id, eventType: event.type, outcome: result.outcome },
+            'stripe webhook: linkage event could not be applied — operator attention required (ADR-0011 §3b)',
+          );
+        }
+
+        return reply.code(200).send({ outcome: result.outcome });
       }
 
       if (normalized.kind === 'purchase_event') {
