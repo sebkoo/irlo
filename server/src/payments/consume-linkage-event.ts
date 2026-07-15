@@ -18,7 +18,7 @@ export interface ConsumeLinkageEventInput {
   provider: SubscriptionProvider;
   /** The rail's own payer id — Stripe Customer id today. Null means the session carried none (ADR-0011 §3b `unattributable`). */
   externalId: string | null;
-  /** The server-set member id echoed back inside the signed session (ADR-0011 Q2's legitimacy chain). Null means the session carried none (`unattributable`). */
+  /** The server-set member id echoed back inside the signed session (ADR-0011 §3b's legitimacy chain). Null means the session carried none (`unattributable`). */
   clientReferenceId: string | null;
 }
 
@@ -32,7 +32,7 @@ export type ConsumeLinkageEventResult =
 /**
  * ADR-0011 §3b's `checkout.session.completed` backstop — an idempotent
  * upsert from the session's (customer, client_reference_id), both
- * server-set evidence echoed back under Stripe's signature (Q2's
+ * server-set evidence echoed back under Stripe's signature (§3b's
  * legitimacy chain). No new `payment_events.disposition` value: `linked`
  * and `already_linked` both write `applied`; `conflict`, `member_not_found`,
  * and `unattributable` write no inbox row at all (mirrors ADR-0009 §3h's

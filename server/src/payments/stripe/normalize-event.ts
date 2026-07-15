@@ -56,7 +56,7 @@ export type NormalizedStripeEvent =
 /**
  * ADR-0011 §3b: the session's server-set evidence, echoed back under
  * Stripe's signature — `customer` and `client_reference_id` were both set
- * by *our* server at checkout-session creation (Q2's legitimacy chain), so
+ * by *our* server at checkout-session creation (§3b's legitimacy chain), so
  * this is the linkage backstop's raw material, not yet validated. Either
  * field can be null (a session our checkout endpoint didn't create, or one
  * created before this field was set) — the linkage consumer, not this pure
