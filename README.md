@@ -232,9 +232,77 @@ demonstrate.
 
 | Horizon | Work |
 |---|---|
-| **Now** | Stage 0 done: verified name · toolchain · canary-tested monorepo · CI · AI harness · design record (ADR 0001–0009). Server foundation live: `/health` · env config · logging · OpenTelemetry tracing (traceId/spanId in request logs) · dockerized dev env · Drizzle + Testcontainers. Landed: ADR-0009 entitlement domain + Stripe event consumers + webhook endpoint + ADR-0011 member↔rail-identity linkage (design, `rail_identities` repository, the linkage consumer, and purchase-branch retirement — slices A–C) ([Start here](#start-here)) |
-| **Next** | ADR-0011 slice D — the checkout-session endpoint (the missing link creator; real purchases 5xx until it lands) · admission & waitlist (US-01/02) — order of record in [`NEXT_STEPS.md`](NEXT_STEPS.md) |
+| **Now** | Stage 0 complete. Stage 1 server foundation live. Stage 2 entitlements and Stage 3 Stripe rail landed through ADR-0011 slice C — see the generated status below ([Start here](#start-here)) |
+| **Next** | ADR-0011 slice D (checkout-session endpoint; real purchases 5xx until it lands) · admission & waitlist (US-01/02) — order of record in [`NEXT_STEPS.md`](NEXT_STEPS.md) |
 | **Later** | App Store rail → reconciliation → Deck feed → chat gateway → iOS flows → web checkout → RN screen → pgvector ranking. The 30-second demo GIF ships with the first user-facing milestone (v0.1.0) |
+
+Regenerated from [`NEXT_STEPS.md`](NEXT_STEPS.md) every commit by
+`make docs-progress`; a stale block fails CI (`make lint` / `make test-ci`
+diff the regenerated output against this file). Not "real-time" — a
+committed file can't be live — but it can't silently drift out of date
+either. Legend: ✅ shipped & tested on `main` · 🚧 in progress · 📋 planned.
+
+<!-- progress:begin -->
+
+### Stage 0 — Naming, toolchain, CI, AI harness (done)
+
+- ✅ **C01–C12** — verified name, toolchain, canary-tested monorepo, CI, AI harness, docs
+
+### Stage 1 — Server foundation online (≈C13–C22)
+
+- ✅ **C13–C15** — `/health` endpoint triplet on Fastify app factory
+- ✅ **C16** — zod-parsed env config (12-factor)
+- ✅ **C17** — pino structured logging
+- ✅ **C18** — OpenTelemetry bootstrap
+- ✅ **C19** — docker-compose dev env (Postgres + Redis)
+- ✅ **C20** — DATABASE_URL env contract + Drizzle client factory
+- ✅ **C21–C22** — Drizzle schema/migrations (Testcontainers-verified) + members repository triplet
+
+### Stage 2 — Entitlements & admission (≈C23–C36) — US-01, US-02
+
+- ✅ **C23** — <details><summary>entitlement service logic — ledger repository + inbox repository — over the ADR-0009 tables C21…</summary> entitlement service logic — ledger repository + inbox repository — over the ADR-0009 tables C21 already created (schema/tables moved to Stage 1 as ADR-0009's persistence substrate; this triplet is service logic, not schema, per the 2026-07-11 C21 scope note above).</details>
+- ✅ **C24–C27** — <details><summary>subscription state-machine reducer: C24 pure state graph (`transition`), C25 idempotency layer 3…</summary> subscription state-machine reducer: C24 pure state graph (`transition`), C25 idempotency layer 3 (`applyEvent`'s monotonic `highWater` guard, I5a stale-but-economic events), C26 context-only events (`autorenew_set`, `plan_changed`, `renewal_extended`), C27 generation-spawning (`applyPurchase` — `[*] --> trial|active` entry transitions, RESUBSCRIBE-on-terminal spawning generation+1 per I6). This is the pure reducer only — no executor/persistence wiring yet; that lands as part of Stage 3's "subscription state machine wiring" (below), the reducer's first real caller, rather than as a standalone Stage 2 step.</details>
+- 📋 **C28–C29** — <details><summary>capability check `can(member, capability)` + gating middleware *(renumbered from C26–C27 — the…</summary> capability check `can(member, capability)` + gating middleware *(renumbered from C26–C27 — the reducer completion above claimed those numbers first; C-numbers are planning handles per this doc's own header, not promises of exact count, so this is a relabel, not a scope change)*</details>
+- 📋 **C30–C33** — admission state machine (pure core, 100% branch) + persistence
+- 📋 **C34–C35** — waitlist lanes + `waitlist.skip` consumption (idempotent)
+- 📋 **C36** — admission audit log + evidence (sequence diagram, hurl transcripts)
+
+### Stage 3 — Stripe rail (≈C37–C44) — US-09 (server half), US-10
+
+- ✅ **Slice A** — `rail_identities` migration + repository triplet (Testcontainers) — the eighth ADR-0009-family table; a new Stage 3 migration, not a C21 reopen.
+- ✅ **Slice B** — linkage consumer (`checkout.session.completed` → link upsert + inbox row, per ADR-0011 §3b's outcome table) + `linkage_event` normalizer kind + route dispatch.
+- ✅ **Slice C** — <details><summary>purchase-branch retirement: `resolveMemberByRailIdentity` + `consumePurchaseEvent` wiring; the stub…</summary> purchase-branch retirement: `resolveMemberByRailIdentity` + `consumePurchaseEvent` wiring; the stub test mutates into the `unlinked_customer` test; ADR-0011 §3g lists the full test-flip set (golden path, out-of-order pair, conflict).</details>
+- 📋 **Slice D** — checkout-session endpoint — the already-planned Stage 3 bullet, now specified: create-or-reuse the Customer and commit the link before creating the session.
+
+### Stage 4 — App Store rail (≈C43–C49) — US-07, US-08 (server half)
+
+_No slice-level items yet — see the stage heading in NEXT_STEPS.md._
+
+### Stage 5 — Reconciliation (≈C50–C52)
+
+_No slice-level items yet — see the stage heading in NEXT_STEPS.md._
+
+### Stage 6 — Deck feed API (≈C53–C58) — US-03
+
+_No slice-level items yet — see the stage heading in NEXT_STEPS.md._
+
+### Stage 7 — Chat gateway (≈C59–C66) — US-06, US-13
+
+_No slice-level items yet — see the stage heading in NEXT_STEPS.md._
+
+### Stage 8 — iOS client flows (≈C67–C74) — US-03..05, US-07/08 (client), US-12
+
+_No slice-level items yet — see the stage heading in NEXT_STEPS.md._
+
+### Stage 9 — Web checkout, RN screen (≈C75–C80)
+
+_No slice-level items yet — see the stage heading in NEXT_STEPS.md._
+
+### Stage AI — retrieval slice (planned, not started)
+
+_No slice-level items yet — see the stage heading in NEXT_STEPS.md._
+
+<!-- progress:end -->
 
 Full sequence with commit-level granularity: [`NEXT_STEPS.md`](NEXT_STEPS.md).
 
