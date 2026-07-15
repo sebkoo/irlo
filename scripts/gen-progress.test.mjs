@@ -354,3 +354,27 @@ test('spliceReadme: replaces content strictly between the marker comments', () =
 test('spliceReadme: missing markers is a loud error, not a silent no-op', () => {
   assert.throws(() => spliceReadme('# Irlo\n\nno markers here\n', 'X'), /progress:begin/);
 });
+
+test('spliceReadme: reversed markers (end before begin) is a loud error', () => {
+  const reversed = '# Irlo\n\n<!-- progress:end -->\nbody\n<!-- progress:begin -->\n';
+  assert.throws(() => spliceReadme(reversed, 'X'), /progress:begin/);
+});
+
+test('synthetic: an in-progress item never leaks the marker into its display name', () => {
+  const fixture = `## Stage 9 — Test\n\n| C90 | some item (in progress) | notes |\n`;
+  const { stages } = parseNextSteps(fixture);
+  assert.equal(stages[0].items[0].name, 'some item');
+});
+
+test('renderProgressBlock: a single unbroken word past the fold threshold still gets a bounded summary', () => {
+  // no space anywhere near the truncation boundary — exercises the
+  // maxLen-fallback branch of truncateForSummary, not the word-boundary one.
+  const longName = 'x'.repeat(250);
+  const block = renderProgressBlock([
+    { title: 'Stage 2 — Test', items: [{ id: 'C1', name: longName, state: 'done' }] },
+  ]);
+  const summaryMatch = /<summary>(.*?)<\/summary>/.exec(block);
+  assert.ok(summaryMatch);
+  assert.ok(summaryMatch[1].length <= 101, 'summary is bounded to ~SUMMARY_LENGTH chars even with no space to break on');
+  assert.ok(block.includes(longName), 'full unbroken text still present for expand/search');
+});
