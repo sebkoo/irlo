@@ -133,6 +133,15 @@ from a session where the file just changed.
   must return exactly one line, `Ben Koo seb.m.koo@gmail.com` (this repo's identity is set
   locally; the global git config is a different identity that must never leak into this
   history). Any other line — stop and ask before pushing.
+- **Review-marker SHA discipline:** `.claude/state/last-reviewed-sha` is written only
+  immediately after a `code-reviewer` verdict that names the current HEAD SHA; the write
+  request quotes that verdict line. Any HEAD-moving operation (commit, amend, fixup,
+  rebase) invalidates a pending marker write. Sole approved exception: `git diff -w
+  <reviewed-sha> HEAD` is empty (a whitespace-only delta), with that empty-diff output
+  quoted in the request. Exceptions are granted by the human, never invented in-flight —
+  a claim about what a diff contains is not evidence of the diff. Promoted here after two
+  in-flight exception attempts in session memory alone proved insufficient to hold the
+  line (2026-07-14, 2026-07-15 — see `docs/ai/methodology.md`).
 
 ## Definition of done
 

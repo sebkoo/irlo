@@ -21,7 +21,11 @@ AI tools" and "productivity-obsessed" — with artifacts, not adjectives.
    immutable evidence (LICENSE, `docs/naming/`). Outer harness: CI (typecheck,
    lint, tests, coverage gates) and a PR template demanding tests + story
    evidence. `docs/ai/evals.md` treats the harness as a system under test with
-   release-blocking scenarios.
+   release-blocking scenarios. The review-marker SHA discipline (§Checkpoints)
+   was promoted here from session memory after two in-flight exception
+   attempts (2026-07-14, 2026-07-15) got caught by the human rather than a
+   gate — a rule that only lives in memory doesn't survive the pressure a
+   rebased HEAD creates.
 4. **Loop engineering — the cycle below,** with a `code-reviewer` subagent
    reviewing every diff against CLAUDE.md + the JD matrix before commit.
 
