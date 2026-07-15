@@ -10,6 +10,7 @@ import {
   ledgerEntries,
   members,
   paymentEvents,
+  railIdentities,
   subscriptions,
 } from '../src/db/schema/index.js';
 
@@ -287,6 +288,81 @@ describe('ADR-0009 schema + migrations (C21)', () => {
         applicationId: randomUUID(),
         event: 'submit',
         actor: `member:${seedMemberId}`,
+      }),
+    );
+  });
+});
+
+// Not a C21 reopen — the eighth ADR-0009-family table, added by ADR-0011
+// slice A, verified with the same suite's helpers and style.
+describe('ADR-0011 rail_identities schema (slice A)', () => {
+  it('creates the rail_identities table with the expected column shape', async () => {
+    const result = await testDb.db.execute(sql`
+      select column_name
+      from information_schema.columns
+      where table_schema = 'public' and table_name = 'rail_identities'
+      order by ordinal_position
+    `);
+
+    const columns = (result.rows as { column_name: string }[]).map((row) => row.column_name);
+
+    expect(columns).toEqual([
+      'id',
+      'member_id',
+      'provider',
+      'external_id',
+      'linked_via',
+      'created_at',
+    ]);
+  });
+
+  it('enforces UNIQUE(provider, external_id) — L3 anti-takeover invariant', async () => {
+    const externalId = `cus_${randomUUID()}`;
+
+    await testDb.db.insert(railIdentities).values({
+      memberId: seedMemberId,
+      provider: 'stripe',
+      externalId,
+      linkedVia: 'checkout_session',
+    });
+
+    await expectUniqueViolation(
+      testDb.db.insert(railIdentities).values({
+        memberId: seedMemberId,
+        provider: 'stripe',
+        externalId,
+        linkedVia: 'checkout_session',
+      }),
+    );
+  });
+
+  it('allows the same member to hold multiple rail identities — 1:N cardinality (§3a)', async () => {
+    await expect(
+      testDb.db.insert(railIdentities).values({
+        memberId: seedMemberId,
+        provider: 'stripe',
+        externalId: `cus_${randomUUID()}`,
+        linkedVia: 'checkout_session',
+      }),
+    ).resolves.not.toThrow();
+
+    await expect(
+      testDb.db.insert(railIdentities).values({
+        memberId: seedMemberId,
+        provider: 'apple',
+        externalId: randomUUID(),
+        linkedVia: 'minted',
+      }),
+    ).resolves.not.toThrow();
+  });
+
+  it('rejects a rail_identities row against a nonexistent member — FK enforcement', async () => {
+    await expectForeignKeyViolation(
+      testDb.db.insert(railIdentities).values({
+        memberId: randomUUID(),
+        provider: 'stripe',
+        externalId: `cus_${randomUUID()}`,
+        linkedVia: 'checkout_session',
       }),
     );
   });
