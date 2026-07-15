@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { buildApp } from '../../src/app.js';
 import { createMembersRepository } from '../../src/db/repositories/members.js';
+import { createRailIdentitiesRepository } from '../../src/db/repositories/rail-identities.js';
 import { createSubscriptionsRepository } from '../../src/db/repositories/subscriptions.js';
 import { ledgerEntries, paymentEvents, subscriptions } from '../../src/db/schema/index.js';
 import { MemoryLogStream } from '../support/memory-log-stream.js';
@@ -334,6 +335,75 @@ describe('POST /webhooks/stripe (ADR-0009 §3h — full route: verify, normalize
       .from(paymentEvents)
       .where(and(eq(paymentEvents.source, 'stripe'), eq(paymentEvents.eventId, eventId)));
     expect(inboxRows).toHaveLength(0);
+
+    await app.close();
+  });
+
+  it('purchase_event (new subscription) for a LINKED customer creates a generation — 200, ledger grant, inbox applied (ADR-0011 §3g item 2, golden path)', async () => {
+    const eventId = `evt_${randomUUID()}`;
+    const invoiceId = `in_${randomUUID()}`;
+    const customerId = `cus_${randomUUID()}`;
+    const providerSubscriptionId = `sub_${randomUUID()}`;
+    const periodStart = 1_767_225_600; // 2026-01-01T00:00:00Z
+    const periodEnd = 1_769_904_000; // 2026-02-01T00:00:00Z
+
+    await createRailIdentitiesRepository(testDb.db).createLink({
+      memberId,
+      provider: 'stripe',
+      externalId: customerId,
+      linkedVia: 'checkout_session',
+    });
+
+    const { payload, signature } = signedFixture(
+      baseEvent({
+        id: eventId,
+        type: 'invoice.paid',
+        created: 1_700_000_000,
+        data: {
+          object: {
+            id: invoiceId,
+            billing_reason: 'subscription_create',
+            total: 999,
+            customer: customerId,
+            period_start: periodStart,
+            period_end: periodEnd,
+            parent: { subscription_details: { subscription: providerSubscriptionId } },
+            lines: { data: [{ pricing: { price_details: { price: 'price_monthly' } } }] },
+          },
+        },
+      }),
+    );
+
+    const app = buildTestApp(new MemoryLogStream());
+    await app.ready();
+
+    const response = await postSignedWebhook(app, payload, signature);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ outcome: 'generation_created' });
+
+    const [row] = await testDb.db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.providerSubscriptionId, providerSubscriptionId));
+    expect(row?.memberId).toBe(memberId);
+    expect(row?.state).toBe('active');
+    expect(row?.productId).toBe('price_monthly');
+    expect(row?.currentPeriodEnd).toEqual(new Date(periodEnd * 1000));
+
+    const ledgerRows = await testDb.db
+      .select()
+      .from(ledgerEntries)
+      .where(eq(ledgerEntries.naturalKey, `stripe:invoice:${invoiceId}`));
+    expect(ledgerRows).toHaveLength(1);
+    expect(ledgerRows[0]?.entryType).toBe('grant');
+
+    const inboxRows = await testDb.db
+      .select()
+      .from(paymentEvents)
+      .where(and(eq(paymentEvents.source, 'stripe'), eq(paymentEvents.eventId, eventId)));
+    expect(inboxRows).toHaveLength(1);
+    expect(inboxRows[0]?.disposition).toBe('applied');
 
     await app.close();
   });
