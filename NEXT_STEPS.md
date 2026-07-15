@@ -16,6 +16,14 @@ Conventions: every feature lands as a TDD triplet `test → feat → refactor`
 count. Cross-cutting rules: coverage gates per CLAUDE.md; contracts before
 endpoints; `/adr-new` when a decision is missing.
 
+Status convention: every trackable item — a C-numbered table row/bullet or a
+lettered implementation slice — carries its state on its own defining line:
+`(done YYYY-MM-DD)`, `(in progress)`, or no marker at all, which means
+planned. This defining-line marker is the single source of truth
+`scripts/gen-progress.mjs` reads to generate README's progress block; a state
+recorded only in a separate prose paragraph elsewhere in this file is
+invisible to it and must be moved onto the item's own line.
+
 ## Stage 1 — Server foundation online (≈C13–C22)
 
 | # | Work | Notes |
@@ -26,7 +34,7 @@ endpoints; `/adr-new` when a decision is missing.
 | C18 | OpenTelemetry bootstrap (done) | trace context (traceId/spanId); `startTracing` seam + `buildApp`'s optional `tracing` option — no server entrypoint wires it into a running process yet, mirroring C16/C20's own staged env-var rollout |
 | C19 | docker-compose dev env (Postgres + Redis) (done — runtime-verified: `make dev-up` → both containers healthy → `make dev-down`) | Local runtime is colima, not Docker Desktop (blocked on this managed machine); see `docs/runbook.md` #Local dev environment |
 | C20 | DATABASE_URL env contract + Drizzle client factory (done) | optional until Stage 2 boot-wires the pool |
-| C21–C22 | Drizzle schema/migrations (Testcontainers-verified) + members repository triplet | first tables: members + the ADR-0009 truth logs/projections |
+| C21–C22 | Drizzle schema/migrations (Testcontainers-verified) + members repository triplet (done 2026-07-11) | first tables: members + the ADR-0009 truth logs/projections |
 
 **Reorder (2026-07-11):** the Stage 2 entitlement domain model is designed first —
 [ADR-0009](docs/adr/0009-entitlement-domain-model.md), per CLAUDE.md's named judgment
@@ -219,11 +227,11 @@ rejected — it would shift delivery ownership from Stripe's at-least-once retri
 local replay job, an at-most-once downgrade for money facts). Implementation slices, in
 order:
 
-- **(A)** `rail_identities` migration + repository triplet (Testcontainers) — the eighth
-  ADR-0009-family table; a new Stage 3 migration, not a C21 reopen.
+- **(A)** `rail_identities` migration + repository triplet (Testcontainers) (done 2026-07-15) —
+  the eighth ADR-0009-family table; a new Stage 3 migration, not a C21 reopen.
 - **(B)** linkage consumer (`checkout.session.completed` → link upsert + inbox row, per
-  ADR-0011 §3b's outcome table) + `linkage_event` normalizer kind + route dispatch.
-- **(C)** purchase-branch retirement: `resolveMemberByRailIdentity` +
+  ADR-0011 §3b's outcome table) + `linkage_event` normalizer kind + route dispatch (done 2026-07-15).
+- **(C)** purchase-branch retirement (done 2026-07-15): `resolveMemberByRailIdentity` +
   `consumePurchaseEvent` wiring; the stub test mutates into the `unlinked_customer` test;
   ADR-0011 §3g lists the full test-flip set (golden path, out-of-order pair, conflict).
 - **(D)** checkout-session endpoint — the already-planned Stage 3 bullet, now specified:
