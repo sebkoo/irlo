@@ -89,6 +89,44 @@ describe('normalizeStripeEvent (ADR-0009 §3b — Stripe event-mapping table)', 
     });
   });
 
+  describe('checkout.session.completed — ADR-0011 §3b linkage_event', () => {
+    it('a session with both customer and client_reference_id normalizes to a linkage_event carrying both', () => {
+      const result = normalizeStripeEvent({
+        type: 'checkout.session.completed',
+        data: { object: { customer: 'cus_123', client_reference_id: 'member-abc' } },
+      });
+
+      expect(result).toEqual({
+        kind: 'linkage_event',
+        event: { customer: 'cus_123', clientReferenceId: 'member-abc' },
+      });
+    });
+
+    it("a session missing client_reference_id still normalizes to a linkage_event — null propagates, unattributable is the consumer's call, not the normalizer's", () => {
+      const result = normalizeStripeEvent({
+        type: 'checkout.session.completed',
+        data: { object: { customer: 'cus_123', client_reference_id: null } },
+      });
+
+      expect(result).toEqual({
+        kind: 'linkage_event',
+        event: { customer: 'cus_123', clientReferenceId: null },
+      });
+    });
+
+    it('a session missing customer still normalizes to a linkage_event — null propagates', () => {
+      const result = normalizeStripeEvent({
+        type: 'checkout.session.completed',
+        data: { object: { customer: null, client_reference_id: 'member-abc' } },
+      });
+
+      expect(result).toEqual({
+        kind: 'linkage_event',
+        event: { customer: null, clientReferenceId: 'member-abc' },
+      });
+    });
+  });
+
   describe('customer.subscription.updated — previous_attributes diffing', () => {
     it('a changed cancel_at_period_end normalizes to a single-fact autorenew_set envelope, willRenew inverse of the current flag', () => {
       const result = normalizeStripeEvent({
