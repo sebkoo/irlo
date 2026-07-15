@@ -153,7 +153,7 @@ flowchart TB
 | `linked` | new link committed | 2xx | yes — `applied` |
 | `already_linked` | identical link pre-exists (primary path won, or same fact under a different envelope) | 2xx | yes — `applied`. Not `no_op_live`: that value is documented as purchase-on-live-generation (ADR-0009 decision 6); `applied` already means "the event's effects hold" |
 | `duplicate` | same envelope redelivered — §3d layer 1 | 2xx | pre-existing; the insert aborts, classified outside |
-| `conflict` | identity already linked to a **different** member | 2xx + alert | none — returns before the inbox insert (mirrors §3h's `invalid`: retrying never resolves it; deliberately no disposition slot). With no inbox row, layer 1 never dedupes this envelope: the alert fires on the initial delivery and again on any at-least-once duplicate Stripe sends — loud is correct for a fraud-shaped signal. Recovery is explicit, never silent — §3f |
+| `conflict` | identity already linked to a **different** member | 2xx + alert | none — returns before the inbox insert (mirrors ADR-0009 §3h's `invalid`: retrying never resolves it; deliberately no disposition slot). With no inbox row, layer 1 never dedupes this envelope: the alert fires on the initial delivery and again on any at-least-once duplicate Stripe sends — loud is correct for a fraud-shaped signal. Recovery is explicit, never silent — §3f |
 | `member_not_found` | `client_reference_id` names no member (deleted between session creation and completion) | 2xx + alert | none — same reasoning |
 | `unattributable` | session lacks `client_reference_id` or `customer` — a session our endpoint didn't create | 2xx + alert | none |
 
@@ -179,17 +179,17 @@ A purchase webhook can reach us before its link exists. Three mechanisms were co
 
 | | **(i) 5xx-until-linked** | **(ii) park in `payment_events`, replay on link** | **(iii) quarantine table, replay on link** |
 |---|---|---|---|
-| Delivery ownership | Stripe's at-least-once retry (exponential backoff, up to ~3 days — §3h) remains the delivery mechanism; we remain a pure acknowledger | A redelivery-while-parked hits `UNIQUE(source, event_id)` → classified `duplicate` → 2xx → **Stripe stops retrying**; the local replay job becomes the sole delivery path for a money fact — provider at-least-once downgraded to at-most-once on our own bug budget | 2xx on park; the same sole-delivery shift as (ii), durable in a side table instead of the inbox |
-| §3d fit | Unchanged — returns before the inbox insert, the exact shape §3h already blessed for `no_matching_generation` | An inbox row comes to mean "recorded but **not** applied," and its disposition must mutate `parked → applied` later — the inbox stops being an immutable processing record | Inbox semantics untouched, but a second durable store of unapplied money facts appears beside it |
+| Delivery ownership | Stripe's at-least-once retry (exponential backoff, up to ~3 days — ADR-0009 §3h) remains the delivery mechanism; we remain a pure acknowledger | A redelivery-while-parked hits `UNIQUE(source, event_id)` → classified `duplicate` → 2xx → **Stripe stops retrying**; the local replay job becomes the sole delivery path for a money fact — provider at-least-once downgraded to at-most-once on our own bug budget | 2xx on park; the same sole-delivery shift as (ii), durable in a side table instead of the inbox |
+| §3d fit | Unchanged — returns before the inbox insert, the exact shape ADR-0009 §3h already blessed for `no_matching_generation` | An inbox row comes to mean "recorded but **not** applied," and its disposition must mutate `parked → applied` later — the inbox stops being an immutable processing record | Inbox semantics untouched, but a second durable store of unapplied money facts appears beside it |
 | I14 fit | One write path; the route gains only a read (the resolver) | A replay executor is a second entry point mutating aggregates | Same second entry point |
 | Latency to entitlement | Primary path: zero — the link precedes the session (§3b). Backstop path: one Stripe retry (minutes-scale) | Immediate on link creation | Immediate on link creation |
-| Blast radius | One new route outcome (`unlinked_customer`), one §3h row extension | New disposition value + disposition mutability + replay machinery across §3d/§3h | New table + replay machinery |
+| Blast radius | One new route outcome (`unlinked_customer`), one ADR-0009 §3h row extension | New disposition value + disposition mutability + replay machinery across §3d/§3h | New table + replay machinery |
 
 **Decided: (i).** The deciding argument is delivery ownership (D2), not simplicity: (ii)
 and (iii) both convert Stripe's at-least-once guarantee into an at-most-once local replay
 obligation for money facts, and (ii) additionally makes inbox dispositions mutable — the
-same correctness-regression class as §3g's rejected facet-key option. (i) extends §3h's
-existing reasoning: `unlinked_customer` and `no_matching_generation` are the same shape —
+same correctness-regression class as ADR-0009 §3g's rejected facet-key option. (i) extends
+ADR-0009 §3h's existing reasoning: `unlinked_customer` and `no_matching_generation` are the same shape —
 an event arriving before its prerequisite, where provider redelivery genuinely resolves.
 The two cases *compose*: an unlinked purchase 5xxes, its dependent economic events 5xx on
 `no_matching_generation`, and once the link lands the retries drain in causal order
@@ -262,8 +262,9 @@ it (D3).
   its own text ("binds member ↔ customer/subscription") holds as written.
 - *Explicitly untouched:* every existing table's columns (`members` included); the
   `payment_events.disposition` enum (all five values, nothing added); invariants I1–I14;
-  §3d's three layers; §3g; the reducers; and all four consumer functions' signatures and
-  semantics — `consumePurchaseEvent` still takes `memberId`; the route resolves it.
+  ADR-0009 §3d's three layers; ADR-0009 §3g; the reducers; and all four consumer
+  functions' signatures and semantics — `consumePurchaseEvent` still takes `memberId`;
+  the route resolves it.
 
 ### 3g. Retirement of the 5xx stub — the observable definition of implemented
 
