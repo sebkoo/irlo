@@ -339,6 +339,37 @@ describe('POST /webhooks/stripe (ADR-0009 §3h — full route: verify, normalize
     await app.close();
   });
 
+  it('purchase_event (new subscription) with a null customer is unlinked_customer — no lookup attempted, same 5xx shape', async () => {
+    const eventId = `evt_${randomUUID()}`;
+
+    const { payload, signature } = signedFixture(
+      baseEvent({
+        id: eventId,
+        type: 'invoice.paid',
+        created: 1_700_000_000,
+        data: { object: { billing_reason: 'subscription_create', total: 0, customer: null } },
+      }),
+    );
+
+    const loggerStream = new MemoryLogStream();
+    const app = buildTestApp(loggerStream);
+    await app.ready();
+
+    const response = await postSignedWebhook(app, payload, signature);
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ error: 'unlinked_customer' });
+    expect(loggerStream.parsedLines().some((line) => line['level'] === 50)).toBe(true);
+
+    const inboxRows = await testDb.db
+      .select()
+      .from(paymentEvents)
+      .where(and(eq(paymentEvents.source, 'stripe'), eq(paymentEvents.eventId, eventId)));
+    expect(inboxRows).toHaveLength(0);
+
+    await app.close();
+  });
+
   it('purchase_event (new subscription) for a LINKED customer creates a generation — 200, ledger grant, inbox applied (ADR-0011 §3g item 2, golden path)', async () => {
     const eventId = `evt_${randomUUID()}`;
     const invoiceId = `in_${randomUUID()}`;
@@ -404,6 +435,52 @@ describe('POST /webhooks/stripe (ADR-0009 §3h — full route: verify, normalize
       .where(and(eq(paymentEvents.source, 'stripe'), eq(paymentEvents.eventId, eventId)));
     expect(inboxRows).toHaveLength(1);
     expect(inboxRows[0]?.disposition).toBe('applied');
+
+    await app.close();
+  });
+
+  it('purchase_event (new subscription) for a LINKED customer with no resolvable subscription linkage — 500, alerted, nothing written', async () => {
+    const eventId = `evt_${randomUUID()}`;
+    const customerId = `cus_${randomUUID()}`;
+
+    await createRailIdentitiesRepository(testDb.db).createLink({
+      memberId,
+      provider: 'stripe',
+      externalId: customerId,
+      linkedVia: 'checkout_session',
+    });
+
+    const { payload, signature } = signedFixture(
+      baseEvent({
+        id: eventId,
+        type: 'invoice.paid',
+        created: 1_700_000_000,
+        data: {
+          object: {
+            billing_reason: 'subscription_create',
+            total: 999,
+            customer: customerId,
+            parent: null,
+          },
+        },
+      }),
+    );
+
+    const loggerStream = new MemoryLogStream();
+    const app = buildTestApp(loggerStream);
+    await app.ready();
+
+    const response = await postSignedWebhook(app, payload, signature);
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ error: 'routing_key_unresolved' });
+    expect(loggerStream.parsedLines().some((line) => line['level'] === 50)).toBe(true);
+
+    const inboxRows = await testDb.db
+      .select()
+      .from(paymentEvents)
+      .where(and(eq(paymentEvents.source, 'stripe'), eq(paymentEvents.eventId, eventId)));
+    expect(inboxRows).toHaveLength(0);
 
     await app.close();
   });
