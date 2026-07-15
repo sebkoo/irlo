@@ -237,16 +237,37 @@ still 5xxes as `unlinked_customer` until D lands.
 Stage 4 note: Apple token minting/first-submission flows consume the same table (ADR-0011
 §3e); no fresh linkage design pause needed there.
 
-**Slice A done (2026-07-15, local only, not yet pushed):** `rail_identities` schema +
-migration + the three-operation repository triplet (`createLink`,
-`resolveMemberByRailIdentity`, `getLatestIdentity`) landed, each as a genuine red→green
-pair, Testcontainers-verified. Two code-reviewer passes (Opus 4.8, xhigh): the first
-flagged an untested `resolveMemberByRailIdentity` provider predicate (a real
-misattribution-of-money risk given `UNIQUE(provider, external_id)` allows the same raw
-external id under two providers) and a missed bare `§3g` qualifier in ADR-0011 §3f; both
-fixed and folded into their originating commits via fixup+autosquash, re-reviewed clean.
-Server suite: 100% statement/branch/function/line coverage. **Next:** slice (B) — the
-linkage consumer.
+**Slice A done (2026-07-15):** `rail_identities` schema + migration + the three-operation
+repository triplet (`createLink`, `resolveMemberByRailIdentity`, `getLatestIdentity`)
+landed, each as a genuine red→green pair, Testcontainers-verified. Two code-reviewer
+passes (Opus 4.8, xhigh): the first flagged an untested `resolveMemberByRailIdentity`
+provider predicate (a real misattribution-of-money risk given `UNIQUE(provider,
+external_id)` allows the same raw external id under two providers) and a missed bare
+`§3g` qualifier in ADR-0011 §3f; both fixed and folded into their originating commits via
+fixup+autosquash, re-reviewed clean. Server suite: 100% statement/branch/function/line
+coverage.
+
+**Slice B done (2026-07-15):** the `checkout.session.completed` linkage consumer landed —
+`normalizeStripeEvent` gains a `linkage_event` kind, `consumeLinkageEvent` implements
+§3b's full outcome table (`linked`/`already_linked`/`duplicate`/`conflict`/
+`member_not_found`/`unattributable`, no new `payment_events.disposition` value), and the
+route dispatches it (always 2xx; alerted on the three outcomes that never resolve on
+redelivery). `purchase_event`'s 5xx stub deliberately untouched (that's slice C).
+
+**Slice C done (2026-07-15):** the `purchase_event` 5xx stub is retired. The route now
+resolves the member via `resolveMemberByRailIdentity('stripe', customer)` before calling
+`consumePurchaseEvent` — resolver hit → 2xx (`generation_created`/`no_op_live`/
+`duplicate`); resolver miss → 5xx `unlinked_customer` + alert + zero rows written
+(ADR-0009 §3h case (c), added by ADR-0011 §3d/§3f). All four of §3g's named
+done-definition tests pass, including the flagship out-of-order pair (purchase 5xxes →
+`checkout.session.completed` links it → the same purchase envelope re-posted succeeds).
+`consumePurchaseEvent`'s own signature is unchanged (Q6) — the route resolves `memberId`,
+the consumer still just takes it. Server suite: 100% statement/branch/function/line
+coverage. **The C↔D dependency stands as designed:** production purchases still 5xx as
+`unlinked_customer` until slice D's checkout-session endpoint creates real links — slice C
+alone only makes the purchase path pass end-to-end in tests with fixture-created links.
+**Next:** slice (D) — the checkout-session endpoint (create-or-reuse the Stripe Customer,
+commit the link before creating the session).
 
 ## Stage 4 — App Store rail (≈C43–C49) — US-07, US-08 (server half)
 
