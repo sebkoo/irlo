@@ -38,6 +38,30 @@ const IN_PROGRESS_MARKER_TEST_RE = /\(in progress\)/i;
 
 const STATE_EMOJI = { done: '✅', in_progress: '🚧', planned: '📋' };
 
+// Mechanical mitigation for long item text (a length cutoff, not an
+// importance judgment about what to keep): anything over FOLD_THRESHOLD
+// chars collapses behind <details><summary>; the full text stays present
+// (searchable, and visible on expand), just not pre-rendered inline.
+const FOLD_THRESHOLD = 200;
+const SUMMARY_LENGTH = 100;
+
+function truncateForSummary(text, maxLen) {
+  if (text.length <= maxLen) return text;
+  const cut = text.slice(0, maxLen);
+  const lastSpace = cut.lastIndexOf(' ');
+  const boundary = lastSpace > maxLen * 0.4 ? lastSpace : maxLen;
+  return `${cut.slice(0, boundary)}…`;
+}
+
+function renderItemRow(item) {
+  const emoji = STATE_EMOJI[item.state];
+  if (item.name.length <= FOLD_THRESHOLD) {
+    return `- ${emoji} **${item.id}** — ${item.name}`;
+  }
+  const summary = truncateForSummary(item.name, SUMMARY_LENGTH);
+  return `- ${emoji} **${item.id}** — <details><summary>${summary}</summary> ${item.name}</details>`;
+}
+
 const MARK_BEGIN = '<!-- progress:begin -->';
 const MARK_END = '<!-- progress:end -->';
 
@@ -200,9 +224,9 @@ export function renderProgressBlock(stages) {
     .map((stage) => {
       const heading = `### ${stage.title}`;
       if (stage.items.length === 0) {
-        return `${heading}\n\n_No C-numbered or lettered items tracked yet — see NEXT_STEPS.md._`;
+        return `${heading}\n\n_No slice-level items yet — see the stage heading in NEXT_STEPS.md._`;
       }
-      const rows = stage.items.map((item) => `- ${STATE_EMOJI[item.state]} **${item.id}** — ${item.name}`);
+      const rows = stage.items.map(renderItemRow);
       return `${heading}\n\n${rows.join('\n')}`;
     })
     .join('\n\n');
