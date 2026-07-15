@@ -13,15 +13,16 @@ export interface ApplyAdmissionEventInput {
   applicationId: string;
   event: AdmissionEvent;
   /**
-   * The audit row's actor/reasonCode — supplied explicitly rather than
-   * extracted from `event`, since several event types (auto_triage,
-   * review_open, queue_advanced, onboarding_complete) carry no actor of
-   * their own (their guards are executor/authorization concerns outside
-   * the pure core — see admission-transition.ts's doc comment) yet I9
-   * still requires every admission_events row to have one. For
-   * decision/withdraw events, the caller is expected to pass the same
-   * actor already embedded in `event` — one source of truth for the row,
-   * not two that could silently diverge.
+   * The audit row's actor/reasonCode for event types that carry none of
+   * their own (auto_triage, review_open, queue_advanced,
+   * onboarding_complete — their guards are executor/authorization concerns
+   * outside the pure core, see admission-transition.ts's doc comment), yet
+   * I9 still requires every admission_events row to have an actor. For
+   * decision/withdraw events, these fields are IGNORED — the row is
+   * written from `event.actor`/`event.reasonCode` instead (see
+   * `auditActor`/`auditReasonCode` below), so the append-only log can never
+   * disagree with the domain event it's auditing, even if a caller passes
+   * a mismatched value here by mistake.
    */
   actor: string;
   reasonCode: string | null;
@@ -45,6 +46,18 @@ function admissionEventLogType(
     return 'decision_defer';
   }
   return event.type;
+}
+
+/** decision/withdraw events carry their own actor — that's the audit source of truth, never the input's. */
+function auditActor(event: AdmissionEvent, inputActor: string): string {
+  if (event.type === 'decision' || event.type === 'withdraw') return event.actor;
+  return inputActor;
+}
+
+/** Only decision events carry a reasonCode; every other event falls back to the caller-supplied value (typically null). */
+function auditReasonCode(event: AdmissionEvent, inputReasonCode: string | null): string | null {
+  if (event.type === 'decision') return event.reasonCode;
+  return inputReasonCode;
 }
 
 /**
@@ -89,8 +102,8 @@ export async function applyAdmissionEvent(
     await tx.insert(admissionEvents).values({
       applicationId: input.applicationId,
       event: admissionEventLogType(input.event),
-      actor: input.actor,
-      reasonCode: input.reasonCode,
+      actor: auditActor(input.event, input.actor),
+      reasonCode: auditReasonCode(input.event, input.reasonCode),
     });
 
     if (!result.noop) {
