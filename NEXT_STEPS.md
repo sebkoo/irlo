@@ -74,9 +74,47 @@ stages don't describe the same work twice.
   *(renumbered from C26–C27 — the reducer completion above claimed those
   numbers first; C-numbers are planning handles per this doc's own header,
   not promises of exact count, so this is a relabel, not a scope change)*
-- C30–C33 admission state machine (pure core, 100% branch) + persistence
+- C30–C33 admission state machine (pure core, 100% branch) + persistence (done 2026-07-15)
 - C34–C35 waitlist lanes + `waitlist.skip` consumption (idempotent)
 - C36 admission audit log + evidence (sequence diagram, hurl transcripts)
+
+**Reorder (2026-07-15):** C30–C33 lands before C28–C29 — I10's
+`can(admissionState, entitlementSnapshot)` needs the admission state type to
+exist first, so building the capability check ahead of the admission machine
+it gates would have nothing concrete to type against. C28–C29 is next.
+
+**C30–C33 done (2026-07-15):** the admission state machine's pure core and
+persistence, mirroring the subscription reducer's proven shape (C24–C27) —
+this is a rerun of that playbook against ADR-0009 §3c, not new design, so no
+fresh judgment escalation was needed. `server/src/domain/admission-transition.ts`:
+C30 `transition()` (every §3c state/transition/off-graph rejection, plus the
+double-approve race — a repeat decision is a recorded no-op, a conflicting
+one a typed `conflicting_decision` error, generalized from the ADR's
+accept-specific example to all three decision outcomes uniformly, a judgment
+call worth a second look in code review rather than an ADR-level gap); C31
+`applySubmission` (mirrors `applyPurchase`'s generation-spawn decision —
+crew-open/no-live-application/cooldown-elapsed guards, reapply after any
+terminal state). Two guard families stay outside the pure core by design,
+mirroring how JWS verification precedes the subscription reducer rather than
+living inside it: authorization guards (`review_open`'s `can(review)`,
+`withdraw`'s actor = applicant) are C28–C29 territory; dispatch-timing guards
+(`auto_triage`'s queue-depth SLA, `queue_advanced`'s slot-opened/head-of-queue)
+decide whether the executor fires the event, not how it resolves once fired.
+`lane` context stays untracked — its only mutator, `skip_consumed`, is
+C34–C35 scope. C32: `server/src/db/repositories/{applications,admission-events}.ts`,
+Testcontainers-verified, including I8's DB-enforced live-application
+uniqueness both firing and correctly not firing across a reapply. C33:
+`server/src/admission/{submit-application,apply-admission-event}.ts` —
+`submitApplication` reuses `consumePurchaseEvent`'s advisory-lock-plus-
+FOR-UPDATE shape (proven under genuine concurrent-connection interleaving,
+not just sequential replay); `applyAdmissionEvent` reuses
+`consumeContextEvent`'s simpler FOR-UPDATE-only shape. Both write to
+`admission_events` only on a genuine ok result — a rejected or conflicting
+attempt is signaled to the caller but never persisted, matching
+subscription-transition.ts's own rule that an off-graph `invalid` result
+never becomes a written disposition. Server suite: 100% statement/branch/
+function/line coverage on both domain files; 273/273 tests passing.
+**Next:** C28–C29 (capability check + gating middleware), now unblocked.
 
 **Reducer completion (2026-07-11 close, done):** subscription state-machine
 reducer triplets landed — ADR-0009 §3b's tables implemented verbatim (states,
