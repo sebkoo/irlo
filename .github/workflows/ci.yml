@@ -30,12 +30,21 @@ jobs:
       - run: pnpm -r format
       - run: pnpm -r test:coverage
 
+      # scripts/ is stdlib-only Node outside the pnpm workspace (mirrors
+      # scripts/validate-mermaid.mjs) — its own test suite, not covered by
+      # `pnpm -r test:coverage` above.
+      - run: node --test scripts/*.test.mjs
+
       # Renders every fenced ```mermaid block (README + docs/) with mmdc — a
       # syntax guard, not a GitHub-render guarantee (mmdc's mermaid.js version
       # didn't reproduce the crash this gate exists to catch; see
       # scripts/validate-mermaid.mjs). Best mechanical gate available since
       # per-commit review can't see GitHub-side rendering either way.
       - run: node scripts/validate-mermaid.mjs
+
+      # Drift gate: README's generated progress block must match what
+      # scripts/gen-progress.mjs would produce from NEXT_STEPS.md right now.
+      - run: node scripts/gen-progress.mjs --check
 
       - name: Upload coverage (flag server)
         uses: codecov/codecov-action@v7
