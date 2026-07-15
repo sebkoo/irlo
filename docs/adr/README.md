@@ -15,7 +15,10 @@ superseded-by link. This index is the architecture tour — read top to bottom.
 | [0007](0007-sdlc-and-operational-excellence.md) | SDLC & ops: trunk-based, CI/CD, Docker dev, Fly.io staging, SLOs, k6 | accepted |
 | [0008](0008-ios-demo-client.md) | iOS demo client: UIKit shell + SwiftUI, RxSwift⇄Combine, CoreData, StoreKit 2 | accepted |
 | [0009](0009-entitlement-domain-model.md) | Entitlement domain model: state machines, unified ledger, idempotency, reconciliation | accepted |
+| [0011](0011-member-rail-identity-linkage.md) | Member↔rail-identity linkage: `rail_identities` table, authenticated-channel link creation, 5xx-until-linked | accepted |
 
-Planned future ADRs are queued in [`NEXT_STEPS.md`](../../NEXT_STEPS.md)
-(geo indexing, feature-flag service, RevenueCat build-vs-buy, server-side AI
-features, RN brownfield integration, analytics pipeline).
+ADR-0010 is reserved for the Stage AI design session (`NEXT_STEPS.md` §Stage AI)
+— the number gap is a reservation, not a missing record. Further planned ADRs
+are queued in [`NEXT_STEPS.md`](../../NEXT_STEPS.md) (geo indexing,
+feature-flag service, RevenueCat build-vs-buy, server-side AI features, RN
+brownfield integration, analytics pipeline).

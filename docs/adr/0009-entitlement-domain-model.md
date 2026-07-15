@@ -507,6 +507,8 @@ management; option 1 is its upgrade path if scale ever demands it.
 
 ## Links
 
+- Refined by [ADR-0011](0011-member-rail-identity-linkage.md) — member↔rail-identity
+  linkage: §3b's `(linkage)` row concretized; §3h's 5xx row gains `unlinked_customer`
 - Refines [ADR-0004](0004-payments-platform.md) — dual rail, one entitlement truth
 - Refines [ADR-0005](0005-member-experience-core.md) — admission, capability gating, audit
 - [ADR-0003](0003-backend-platform.md) — Postgres/Redis/BullMQ substrate these tables land on
