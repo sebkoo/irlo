@@ -25,14 +25,16 @@ import type {
  *   charge.refunded, invoice.paid (billing_reason branches 'purchased' vs
  *   'renewed' vs unsupported), customer.subscription.updated
  *   (previous_attributes diffing branches autorenew_set vs plan_changed vs
- *   unsupported — see its own case below).
+ *   unsupported — see its own case below), checkout.session.completed
+ *   (member↔customer linkage — ADR-0011 §3b; a `linkage_event`, not a
+ *   subscription-state event, so it carries no `SubscriptionEvent`. A null
+ *   `customer`/`client_reference_id` still normalizes here — classifying
+ *   that as `unattributable` is the linkage consumer's job, not this pure
+ *   mapping's).
  * - Deferred to a follow-up triplet, needs payload branching this switch
  *   doesn't yet do: charge.dispute.closed (only a `status: 'lost'` dispute
  *   is refund-equivalent — a 'won' dispute isn't a subscription event at
  *   all).
- * - Not a subscription-state event, so intentionally never mapped here:
- *   checkout.session.completed (member↔customer linkage — the executor's
- *   job, not the reducer's).
  * - Everything else genuinely falls to `'unsupported'`.
  *
  * `context_event`'s `events` is an ordered, non-empty list rather than a
@@ -48,7 +50,22 @@ export type NormalizedStripeEvent =
   | { kind: 'subscription_event'; event: SubscriptionEvent }
   | { kind: 'context_event'; events: readonly [ContextEvent, ...ContextEvent[]] }
   | { kind: 'purchase_event'; event: PurchaseEvent }
+  | { kind: 'linkage_event'; event: LinkageEvent }
   | { kind: 'unsupported'; stripeEventType: string };
+
+/**
+ * ADR-0011 §3b: the session's server-set evidence, echoed back under
+ * Stripe's signature — `customer` and `client_reference_id` were both set
+ * by *our* server at checkout-session creation (Q2's legitimacy chain), so
+ * this is the linkage backstop's raw material, not yet validated. Either
+ * field can be null (a session our checkout endpoint didn't create, or one
+ * created before this field was set) — the linkage consumer, not this pure
+ * mapping, classifies a null as `unattributable`.
+ */
+export interface LinkageEvent {
+  customer: string | null;
+  clientReferenceId: string | null;
+}
 
 /**
  * Only the field this normalizer actually reads from a subscription item —
@@ -62,6 +79,21 @@ interface MinimalSubscriptionItems {
 type MinimalSubscriptionDiff = Pick<Stripe.Subscription, 'cancel_at_period_end'> & {
   items: MinimalSubscriptionItems;
 };
+
+/**
+ * `Stripe.Checkout.Session.customer` is typed for the (expandable) REST
+ * response, so it's a `string | Customer | DeletedCustomer | null` even
+ * though webhook payloads never carry an expanded object. Narrows to just
+ * the id, honestly handling the object shape rather than asserting it away.
+ */
+function rawCustomerId(customer: Stripe.Checkout.Session['customer']): string | null {
+  if (customer === null) return null;
+  /* c8 ignore next -- unreachable via a real webhook delivery: Stripe's
+   * expand param has no webhook counterpart, so `customer` is always the
+   * bare id string here, never the Customer/DeletedCustomer object arms
+   * this type only carries because it's shared with the REST response. */
+  return typeof customer === 'string' ? customer : customer.id;
+}
 
 /**
  * Each handled Stripe event type paired with only the payload fields its
@@ -84,6 +116,10 @@ type StripeNormalizerInput =
       };
     }
   | {
+      type: 'checkout.session.completed';
+      data: { object: Pick<Stripe.Checkout.Session, 'customer' | 'client_reference_id'> };
+    }
+  | {
       type: Exclude<
         Stripe.Event['type'],
         | 'invoice.payment_failed'
@@ -91,6 +127,7 @@ type StripeNormalizerInput =
         | 'charge.refunded'
         | 'invoice.paid'
         | 'customer.subscription.updated'
+        | 'checkout.session.completed'
       >;
     };
 
@@ -197,6 +234,20 @@ export function normalizeStripeEvent(event: StripeNormalizerInput): NormalizedSt
         events: facts as [ContextEvent, ...ContextEvent[]],
       };
     }
+
+    case 'checkout.session.completed':
+      return {
+        kind: 'linkage_event',
+        event: {
+          // Webhooks never expand relations (Stripe's expand param has no
+          // webhook counterpart), so `customer` is always the bare id
+          // string in a real payload — the object/DeletedCustomer arms
+          // only exist because Stripe.Checkout.Session's type is shared
+          // with the (expandable) REST response.
+          customer: rawCustomerId(event.data.object.customer),
+          clientReferenceId: event.data.object.client_reference_id,
+        },
+      };
 
     default:
       return { kind: 'unsupported', stripeEventType: event.type };
