@@ -114,7 +114,7 @@ two tiers are complementary, not redundant — skipping the milestone sweep
 because the triplets were "already reviewed" is exactly the gap that let
 this through.
 
-**Operational note (2026-07-12): seven cases of the harness enforcing its own rules.**
+**Operational note (2026-07-14): eight cases of the harness enforcing its own rules.**
 (1) The reviewer self-report check caught a stale `code-reviewer` definition before a
 result was trusted (agent-reload note above); (2) the milestone-boundary sweep caught
 cross-commit doc drift that three per-triplet reviews had each missed (previous note);
@@ -183,6 +183,39 @@ unrelated `2>/dev/null` stderr redirect elsewhere in a read-only command) surfac
 immediately afterward and was deferred to `NEXT_STEPS.md` rather than fixed same-session,
 per that same rule — a known refinement, not a silent gap.
 
+(8) A Stripe webhook route TDD triplet landed several `Edit`-tool-touched files across a
+session, then `make test-ci` — the pre-push gate CLAUDE.md mandates in place of the
+lighter `make test`/`pnpm -r test` — failed on things a "format/lint/test hooks" claim in
+this repo's own README would lead a reader to expect had already been caught: four
+`noPropertyAccessFromIndexSignature` typecheck errors in a test file, one non-autofixable
+`@typescript-eslint/require-await` lint error, and a Prettier formatting drift. Investigating why:
+this repo has no local git pre-commit hook at all (`.git/hooks/` holds only Git's inert
+`.sample` templates; no husky/lefthook config exists anywhere in the tree) — the only
+local automation is `.claude/hooks/format-lint.sh`, a Claude Code `PostToolUse` hook that
+runs `prettier --write` / `eslint --fix` / `vitest related` after each `Edit`/`Write` call.
+That hook is not a broken gate; it is, by its own header comment, deliberately
+**fail-open**: all output is redirected to `/dev/null` and it always exits 0, "CI is the
+enforcing harness" — so a lint finding `--fix` can't auto-repair (like `require-await`,
+which isn't a safe automatic rewrite) is silently discarded rather than surfaced
+mid-session, and the hook never invokes `tsc --noEmit` at all, so a strict-TypeScript
+typecheck violation is a class of error this hook is structurally incapable of catching
+regardless of its exit behavior. `extract-subscription-id.ts`'s formatting drift predates
+this session entirely (the file existed, uncommitted, before this conversation began), so
+no `PostToolUse` hook had fired against it until this session explicitly ran `prettier
+--write` near the end. None of this is a bug: the hook did exactly what its own comment
+says it does. The gap is an expectations one — README's "format/lint/test hooks" line
+reads, to a skimming reader, like a local commit-time gate that doesn't exist; the actual
+gate is `make test-ci` run by discipline before every push (CLAUDE.md's own checkpoint
+rule, and the reason it exists), which is precisely the mechanism that caught this
+session's drift before it reached a commit history a reviewer or interviewer would see.
+Case 8 is closer in shape to cases 1 and 2 than to case 7: no adversarial reasoning or
+rule-bypass attempt was involved, just a two-tier gate (fast, fail-open convenience layer;
+slow, fail-closed enforcement layer) working as designed — but it is the first case where
+the harness's own **README copy**, not its code or process, is the thing that
+overclaimed, which is exactly the kind of drift the "no false claim in the README"
+Never-do rule exists to catch. Recorded rather than silently fixed, per the same
+transparency-over-tidiness principle every other case here follows.
+
 ## The five-layer AI stack — where Irlo stands
 
 The five layers commonly used to reason about AI-native engineering — retrieval,
@@ -196,7 +229,7 @@ overclaim; separating them is the honest picture.
 | Retrieval (embeddings · vector DB · RAG) | n/a | Planned — Stage AI, ADR-0010 (`NEXT_STEPS.md`; ADR not yet written — a Plan-Mode design escalation precedes any code, per the recorded new-domain trigger), not yet built: pgvector Deck re-ranking MVP (provider-agnostic embedding interface, HNSW on existing Postgres, deterministic fake embedder for tests, no API keys in CI); moderation is slice 2 |
 | Efficiency (context · caching · model routing · gateways) | Implemented: CLAUDE.md context packs, the model-routing table, subagent frontmatter pinning (cheap execution / expensive review) | No LLM calls in the product yet, so no gateway/cache by definition |
 | Action (function calling · tool use · MCP · integrations) | Implemented: commands, hooks, subagents | Planned, not yet built: Stripe (Stage 3, C35–C42) and App Store Server Notifications (Stage 4, C43–C49) per [ADR-0004](../adr/0004-payments-platform.md); LLM tool-calling arrives with the retrieval milestone |
-| Agent (harness · loops · memory) | Strongest layer: the plan→red→green→review loop, seven recorded self-enforcement cases (including validating operator-dictated plan content, holding under live-incident urgency, and — case 7 — a human operator catching the assistant's own attempted rule bypass before a configured gate existed to catch it), memory + review markers | n/a by design |
+| Agent (harness · loops · memory) | Strongest layer: the plan→red→green→review loop, eight recorded self-enforcement cases (including validating operator-dictated plan content, holding under live-incident urgency, case 7's human operator catching the assistant's own attempted rule bypass before a configured gate existed to catch it, and case 8's two-tier fail-open/fail-closed gate catching a README overclaim about local hooks), memory + review markers | n/a by design |
 | Trust (guardrails · observability · evals) | Truthfulness rules, gates, `docs/ai/evals.md` | pino landed (C17), OTel queued (C18); inbox dispositions (`applied`/`duplicate`/`superseded`/`no_op_terminal`) are a specified observability model ([ADR-0009](../adr/0009-entitlement-domain-model.md)), not yet built — lands with the Stripe rail (Stage 3) |
 
 Gaps in the product plane are prioritization decisions recorded here, not blind
