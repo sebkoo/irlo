@@ -1,7 +1,9 @@
 import type { Span } from '@opentelemetry/api';
 import type { ServerEnv } from '@irlo/contracts';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type preHandlerAsyncHookHandler } from 'fastify';
 
+import type { Capability } from './capabilities/can.js';
+import { requireCapability, type Authenticator } from './capabilities/gating.js';
 import { loadConfig } from './config.js';
 import type { Db } from './db/client.js';
 import type { Tracing } from './observability/tracing.js';
@@ -11,6 +13,17 @@ import { registerStripeWebhookRoute } from './routes/stripe-webhook.js';
 declare module 'fastify' {
   interface FastifyRequest {
     otelSpan?: Span;
+  }
+
+  interface FastifyInstance {
+    /**
+     * Decorated only when `BuildAppOptions.authenticator` is given (C29) —
+     * absent by default, same staged-rollout shape as `tracing`/`db`. A
+     * future route registration function calls `app.requireCapability(x)`
+     * as a `preHandler` the same way it would call any other app-level
+     * helper; there is no product route yet (see BuildAppOptions.authenticator's doc comment).
+     */
+    requireCapability?: (capability: Capability) => preHandlerAsyncHookHandler;
   }
 }
 
@@ -32,6 +45,17 @@ export interface BuildAppOptions {
    * unaffected.
    */
   tracing?: Tracing;
+  /**
+   * Optional, same staged-rollout shape as `tracing`: when present,
+   * `app.requireCapability(capability)` is decorated as a Fastify
+   * `preHandler` factory gating on `(admissionState, entitlements)` (C28's
+   * `can()`). Absent by default, so existing suites are unaffected. No
+   * product route consumes this yet (NEXT_STEPS.md: the first consumer
+   * arrives with the waitlist/apply routes) — `authenticator` is the seam
+   * only; resolving a real principal from a request is slice D's pending
+   * auth-shape question, deliberately out of scope here.
+   */
+  authenticator?: Authenticator;
 }
 
 export function buildApp(options: BuildAppOptions): FastifyInstance {
@@ -61,6 +85,13 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       req.otelSpan?.end();
       done();
     });
+  }
+
+  if (options.authenticator !== undefined) {
+    const authenticator = options.authenticator;
+    app.decorate('requireCapability', (capability: Capability) =>
+      requireCapability(authenticator, capability),
+    );
   }
 
   registerHealthRoute(app);
