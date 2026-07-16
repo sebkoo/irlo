@@ -74,6 +74,7 @@ stages don't describe the same work twice.
   *(renumbered from C26–C27 — the reducer completion above claimed those
   numbers first; C-numbers are planning handles per this doc's own header,
   not promises of exact count, so this is a relabel, not a scope change)*
+  (done 2026-07-15)
 - C30–C33 admission state machine (pure core, 100% branch) + persistence (done 2026-07-15)
 - C34–C35 waitlist lanes + `waitlist.skip` consumption (idempotent)
 - C36 admission audit log + evidence (sequence diagram, hurl transcripts)
@@ -114,7 +115,41 @@ attempt is signaled to the caller but never persisted, matching
 subscription-transition.ts's own rule that an off-graph `invalid` result
 never becomes a written disposition. Server suite: 100% statement/branch/
 function/line coverage on both domain files; 273/273 tests passing.
-**Next:** C28–C29 (capability check + gating middleware), now unblocked.
+
+**C28–C29 done (2026-07-15):** capability check + gating middleware,
+`server/src/capabilities/{can,gating}.ts` — the directory is named
+`capabilities/`, not `auth/`: the vocabulary ADR-0009 I10 and ADR-0005
+actually use throughout is "capability check"/"gating middleware", never
+"authorization". Capability catalog approved after escalation trigger
+(a) — ADR-0005:65-67 names four capabilities (join crew chat, see full
+Deck, host activities, boost visibility) but no guest/applicant/member
+matrix exists anywhere to read gate values from, so each gate is cited
+individually: `join_crew_chat`/`host_activities` → admission state ===
+`member`; `see_full_deck` → the `irlo.plus` entitlement alone (Deck
+browsing predates admission, monetization.md:25's "full Deck reach");
+`boost_visibility` → a live pending application
+(`submitted`/`under_review`/`waitlisted`, monetization.md:14's
+spark.single as "one visibility boost for your join request" — spark
+balance itself stays the existing ledger spend guard's job, not
+`can()`'s). C28's `can()` is pure/I-O-free over an already-authenticated
+principal's `(admissionState, entitlements)` per I10; the "no principal"
+case is C29's 401, not a `can()` branch. C29's `requireCapability`
+(Fastify preHandler): no principal → 401, `can()` denies → 403 with a
+typed `capability_denied` reason, allowed → principal attached to the
+request. `buildApp` gains an optional `authenticator`, mirroring
+`tracing`'s staged-rollout shape exactly (absent by default). **Open
+gap, folded into slice D:** `can(review)` (`review_open`'s reviewer
+guard, named only in admission-transition.ts's own comments, never an
+ADR/monetization citation) stays unimplemented — it needs a
+staff/reviewer principal shape ADR-0005 never models, which is slice D's
+pending auth-shape question to resolve, not invented here. **Honest
+scope note:** no product route consumes capability gating yet — proven
+via a test-registered route instead, the same seam-before-caller shape
+`/health` proved for the C18 tracing hook before any real caller existed;
+the first product consumer arrives with the waitlist/apply routes
+(C34–C35). Server suite: 157/157 non-testcontainers tests passing;
+`can.ts`/`gating.ts` both 100% statement/branch/function/line coverage.
+**Next:** C34–C35 (waitlist lanes + `waitlist.skip` consumption).
 
 **Reducer completion (2026-07-11 close, done):** subscription state-machine
 reducer triplets landed — ADR-0009 §3b's tables implemented verbatim (states,
