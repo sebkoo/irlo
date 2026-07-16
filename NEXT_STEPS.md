@@ -76,7 +76,7 @@ stages don't describe the same work twice.
   not promises of exact count, so this is a relabel, not a scope change)*
   (done 2026-07-15)
 - C30–C33 admission state machine (pure core, 100% branch) + persistence (done 2026-07-15)
-- C34–C35 waitlist lanes + `waitlist.skip` consumption (idempotent)
+- C34–C35 waitlist lanes + `waitlist.skip` consumption (idempotent) (done 2026-07-16)
 - C36 admission audit log + evidence (sequence diagram, hurl transcripts)
 
 **Reorder (2026-07-15):** C30–C33 lands before C28–C29 — I10's
@@ -150,6 +150,40 @@ the first product consumer arrives with the waitlist/apply routes
 (C34–C35). Server suite: 157/157 non-testcontainers tests passing;
 `can.ts`/`gating.ts` both 100% statement/branch/function/line coverage.
 **Next:** C34–C35 (waitlist lanes + `waitlist.skip` consumption).
+
+**C34–C35 done (2026-07-16):** waitlist lanes + `waitlist.skip` consumption,
+plus the first product route consuming C28–C29's capability gating.
+Semantics derived from the ADRs and approved before coding (capability-
+catalog pattern): two lanes (`standard`/`priority`, ADR-0009 §3c:165),
+merged queue order priority-then-standard FIFO-within-lane (ADR-0005:55-58),
+skip = a one-time `standard→priority` promotion (§3c:178) that reorders but
+never itself advances the queue (`queue_advanced`, untouched, still does
+that). Two riders sharpened the guard matrix before implementation: a
+same-key replay (network retry) must return the original success with no
+second debit, distinct from a new-key `already_priority`; and a skip against
+a submitted/under_review application is neither `already_priority` nor the
+generic `invalid_transition` but its own honest `not_waitlisted` (lane has
+no meaning outside the waitlisted context). C34: `AdmissionAggregate` gains
+`lane` and `transition()` gains `skip_consumed`
+(`server/src/domain/admission-transition.ts`) — no schema/migration change,
+`applications.lane` and `admission_events`'s `skip_consumed` enum value both
+already shipped in C21. C35: `consumeWaitlistSkip`
+(`server/src/admission/consume-waitlist-skip.ts`), the first client-initiated
+spend-debit consumer, implementing ADR-0009 §3d/Q6's spend recipe — reuses
+`applyAdmissionEvent` (C33) for the domain effect via a nested transaction
+(SAVEPOINT) so the lane move and the ledger debit commit or roll back
+together (I11); `pg_advisory_xact_lock` keyed on memberId alone serializes
+concurrent spends across a member's applications. First product route:
+`POST /applications/:applicationId/waitlist-skip`
+(`server/src/routes/waitlist-skip.ts`), contracts-first
+(`packages/contracts/src/waitlist-skip.ts`), gated by
+`requireCapability('boost_visibility')` — `PrincipalContext` gained a
+`memberId` field (unused by `can()` itself) so a gated handler knows whose
+ledger/application it's acting on. The "apply" (`submitApplication`) HTTP
+route is deliberately not wired — its `crewOpen` guard has no real data
+source until Stage 6's crews table lands. Server suite: 323/323 passing,
+100% statement/branch/function/line coverage. **Next:** C36 (admission
+audit log + evidence).
 
 **Reducer completion (2026-07-11 close, done):** subscription state-machine
 reducer triplets landed — ADR-0009 §3b's tables implemented verbatim (states,

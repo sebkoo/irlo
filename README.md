@@ -264,7 +264,7 @@ either. Legend: ✅ shipped & tested on `main` · 🚧 in progress · 📋 plann
 - ✅ **C24–C27** — <details><summary>subscription state-machine reducer: C24 pure state graph (`transition`), C25 idempotency layer 3…</summary> subscription state-machine reducer: C24 pure state graph (`transition`), C25 idempotency layer 3 (`applyEvent`'s monotonic `highWater` guard, I5a stale-but-economic events), C26 context-only events (`autorenew_set`, `plan_changed`, `renewal_extended`), C27 generation-spawning (`applyPurchase` — `[*] --> trial|active` entry transitions, RESUBSCRIBE-on-terminal spawning generation+1 per I6). This is the pure reducer only — no executor/persistence wiring yet; that lands as part of Stage 3's "subscription state machine wiring" (below), the reducer's first real caller, rather than as a standalone Stage 2 step.</details>
 - ✅ **C28–C29** — <details><summary>capability check `can(member, capability)` + gating middleware *(renumbered from C26–C27 — the…</summary> capability check `can(member, capability)` + gating middleware *(renumbered from C26–C27 — the reducer completion above claimed those numbers first; C-numbers are planning handles per this doc's own header, not promises of exact count, so this is a relabel, not a scope change)*</details>
 - ✅ **C30–C33** — admission state machine (pure core, 100% branch) + persistence
-- 📋 **C34–C35** — waitlist lanes + `waitlist.skip` consumption (idempotent)
+- ✅ **C34–C35** — waitlist lanes + `waitlist.skip` consumption (idempotent)
 - 📋 **C36** — admission audit log + evidence (sequence diagram, hurl transcripts)
 
 ### Stage 3 — Stripe rail (≈C37–C44) — US-09 (server half), US-10
