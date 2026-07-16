@@ -9,6 +9,7 @@ import type { Db } from './db/client.js';
 import type { Tracing } from './observability/tracing.js';
 import { registerHealthRoute } from './routes/health.js';
 import { registerStripeWebhookRoute } from './routes/stripe-webhook.js';
+import { registerWaitlistSkipRoute } from './routes/waitlist-skip.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -92,6 +93,13 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     app.decorate('requireCapability', (capability: Capability) =>
       requireCapability(authenticator, capability),
     );
+
+    // The waitlist-skip route needs both a principal to gate on (this
+    // branch) and a db to persist against — mirrors the Stripe webhook
+    // route's own db-plus-secret conditional registration below.
+    if (options.db !== undefined) {
+      registerWaitlistSkipRoute(app, options.db);
+    }
   }
 
   registerHealthRoute(app);
