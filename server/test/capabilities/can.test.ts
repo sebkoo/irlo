@@ -4,6 +4,7 @@ import { can, type PrincipalContext } from '../../src/capabilities/can.js';
 
 function principal(overrides: Partial<PrincipalContext> = {}): PrincipalContext {
   return {
+    memberId: 'member:test',
     admissionState: null,
     entitlements: { irloPlus: false },
     ...overrides,

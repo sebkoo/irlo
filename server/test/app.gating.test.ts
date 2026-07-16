@@ -9,6 +9,7 @@ import { MemoryLogStream } from './support/memory-log-stream.js';
 describe('capability gating seam (C29)', () => {
   it('decorates the app with requireCapability when an authenticator is provided', async () => {
     const principal: PrincipalContext = {
+      memberId: 'member:test',
       admissionState: 'member',
       entitlements: { irloPlus: false },
     };

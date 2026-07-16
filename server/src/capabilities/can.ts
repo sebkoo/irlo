@@ -30,6 +30,15 @@ export interface EntitlementSnapshot {
 }
 
 export interface PrincipalContext {
+  /**
+   * Unused by `can()` itself (a pure function of admissionState/
+   * entitlements only, per I10) — carried on the principal because a route
+   * consuming `req.principal` after a successful gate (e.g. the C34-C35
+   * waitlist-skip route) needs to know *whose* ledger/application it's
+   * acting on, not just that the gate passed. Deferred until now because
+   * C28-C29 had no consumer that needed identity, only authorization.
+   */
+  memberId: string;
   admissionState: AdmissionState | null;
   entitlements: EntitlementSnapshot;
 }

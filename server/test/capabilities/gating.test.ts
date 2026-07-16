@@ -28,6 +28,7 @@ describe('requireCapability (ADR-0009 I10, C29)', () => {
 
   it('responds 403 with a typed reason when can() denies the capability', async () => {
     const principal: PrincipalContext = {
+      memberId: 'member:test',
       admissionState: 'submitted',
       entitlements: { irloPlus: false },
     };
@@ -44,6 +45,7 @@ describe('requireCapability (ADR-0009 I10, C29)', () => {
 
   it('runs the handler with the principal attached to the request when can() allows', async () => {
     const principal: PrincipalContext = {
+      memberId: 'member:test',
       admissionState: 'member',
       entitlements: { irloPlus: false },
     };
