@@ -19,7 +19,7 @@ export type SubmitApplicationResult =
   | { outcome: 'crew_not_open' | 'already_applied' | 'cooldown_active' };
 
 function toAggregate(row: typeof applications.$inferSelect): AdmissionAggregate {
-  return { state: row.state, cooldownUntil: row.cooldownUntil };
+  return { state: row.state, cooldownUntil: row.cooldownUntil, lane: row.lane };
 }
 
 /**

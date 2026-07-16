@@ -20,17 +20,23 @@ export type AdmissionState =
   | 'rejected'
   | 'withdrawn';
 
-/**
- * `lane` (ADR-0009 §3c: "waitlisted (context: lane ∈ {standard, priority})")
- * is deliberately not tracked here — its only mutator, skip_consumed, is
- * C34–C35 scope (out of scope this session), mirroring how
- * subscription-transition.ts leaves `offer` untracked until something
- * actually reads it.
- */
+export type AdmissionLane = 'standard' | 'priority';
+
 export interface AdmissionAggregate {
   state: AdmissionState;
   /** Set by decision(reject); read by applySubmission's reapply guard. Null for every other state. */
   cooldownUntil: Date | null;
+  /**
+   * ADR-0009 §3c: meaningful only in the `waitlisted` context ("lane ∈
+   * {standard, priority}"); null everywhere else, same nullable-outside-its-
+   * context shape as `cooldownUntil`. `auto_triage`/`decision(defer)`
+   * default a null lane to 'standard' on first entry into `waitlisted`, but
+   * preserve an existing non-null lane on re-entry — §3c's "one jump per
+   * application" (skip_consumed's guard) reads as a per-generation fact, not
+   * a per-visit-to-waitlisted one, so a promotion earned before a defer
+   * sends the application back to under_review must survive the round trip.
+   */
+  lane: AdmissionLane | null;
 }
 
 export type DecisionOutcome = 'accept' | 'reject' | 'defer';
@@ -58,6 +64,7 @@ export type AdmissionEvent =
   | { type: 'decision'; outcome: 'accept'; actor: string; reasonCode: string }
   | { type: 'decision'; outcome: 'reject'; actor: string; reasonCode: string; cooldownUntil: Date }
   | { type: 'decision'; outcome: 'defer'; actor: string; reasonCode: string }
+  | { type: 'skip_consumed' }
   | { type: 'onboarding_complete' }
   | { type: 'withdraw'; actor: string };
 
@@ -65,6 +72,32 @@ export interface InvalidTransitionError {
   code: 'invalid_transition';
   state: AdmissionState;
   eventType: AdmissionEvent['type'];
+}
+
+/**
+ * `skip_consumed`'s "lane = standard (one jump per application)" guard
+ * (ADR-0009 §3c) failing because the application is already in the
+ * priority lane. I11 ("skip consumption is atomic with the lane move —
+ * both or neither") means the caller (C35's executor) must not debit the
+ * ledger when this fires — the credit stays available for a different
+ * application.
+ */
+export interface AlreadyPriorityError {
+  code: 'already_priority';
+}
+
+/**
+ * `skip_consumed` fired against an application whose lane context doesn't
+ * exist at all — lane is only meaningful in the `waitlisted` state (§3c:165).
+ * Distinct from `already_priority` (which is specifically "already jumped")
+ * and from the generic `invalid_transition` (which would misreport this as
+ * an off-graph event rather than a context-eligibility failure) — named
+ * honestly so the caller can't confuse a submitted/under_review application
+ * with one that already used its jump.
+ */
+export interface NotWaitlistedError {
+  code: 'not_waitlisted';
+  state: AdmissionState;
 }
 
 /**
@@ -81,7 +114,8 @@ export interface ConflictingDecisionError {
   outcome: DecisionOutcome;
 }
 
-export type AdmissionTransitionError = InvalidTransitionError | ConflictingDecisionError;
+export type AdmissionTransitionError =
+  InvalidTransitionError | ConflictingDecisionError | AlreadyPriorityError | NotWaitlistedError;
 
 export type TransitionResult =
   | { ok: true; aggregate: AdmissionAggregate; noop?: true }
@@ -104,6 +138,13 @@ const DECISION_TARGET: Record<DecisionOutcome, AdmissionState> = {
 export function transition(aggregate: AdmissionAggregate, event: AdmissionEvent): TransitionResult {
   const { state } = aggregate;
 
+  // §3c:165 — lane only exists in the waitlisted context; every other state
+  // gets its own honest reason rather than the generic invalid_transition or
+  // a misleading already_priority.
+  if (event.type === 'skip_consumed' && state !== 'waitlisted') {
+    return { ok: false, error: { code: 'not_waitlisted', state } };
+  }
+
   if (event.type === 'decision') {
     const target = DECISION_TARGET[event.outcome];
 
@@ -121,7 +162,10 @@ export function transition(aggregate: AdmissionAggregate, event: AdmissionEvent)
     if (state !== 'under_review') return invalid(state, event.type);
 
     if (event.outcome === 'reject') {
-      return ok({ state: 'rejected', cooldownUntil: event.cooldownUntil });
+      return ok({ ...aggregate, state: 'rejected', cooldownUntil: event.cooldownUntil });
+    }
+    if (event.outcome === 'defer') {
+      return ok({ ...aggregate, state: target, lane: aggregate.lane ?? 'standard' });
     }
     return ok({ ...aggregate, state: target });
   }
@@ -132,7 +176,9 @@ export function transition(aggregate: AdmissionAggregate, event: AdmissionEvent)
       return invalid(state, event.type);
 
     case 'submitted':
-      if (event.type === 'auto_triage') return ok({ ...aggregate, state: 'waitlisted' });
+      if (event.type === 'auto_triage') {
+        return ok({ ...aggregate, state: 'waitlisted', lane: aggregate.lane ?? 'standard' });
+      }
       if (event.type === 'review_open') return ok({ ...aggregate, state: 'under_review' });
       if (event.type === 'withdraw') return ok({ ...aggregate, state: 'withdrawn' });
       return invalid(state, event.type);
@@ -144,6 +190,11 @@ export function transition(aggregate: AdmissionAggregate, event: AdmissionEvent)
     case 'waitlisted':
       if (event.type === 'queue_advanced') return ok({ ...aggregate, state: 'under_review' });
       if (event.type === 'withdraw') return ok({ ...aggregate, state: 'withdrawn' });
+      if (event.type === 'skip_consumed') {
+        if (aggregate.lane === 'priority')
+          return { ok: false, error: { code: 'already_priority' } };
+        return ok({ ...aggregate, lane: 'priority' });
+      }
       return invalid(state, event.type);
 
     case 'accepted':
@@ -220,7 +271,7 @@ export function applySubmission(
 
   return {
     ok: true,
-    aggregate: { state: 'submitted', cooldownUntil: null },
+    aggregate: { state: 'submitted', cooldownUntil: null, lane: null },
     isNewGeneration: true,
   };
 }

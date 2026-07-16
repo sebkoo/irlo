@@ -31,10 +31,14 @@ export interface ApplyAdmissionEventInput {
 export type ApplyAdmissionEventResult =
   | { outcome: 'applied' | 'noop' }
   | { outcome: 'not_found' }
-  | { outcome: 'invalid_transition' | 'conflicting_decision'; error: AdmissionTransitionError };
+  | {
+      outcome:
+        'invalid_transition' | 'conflicting_decision' | 'already_priority' | 'not_waitlisted';
+      error: AdmissionTransitionError;
+    };
 
 function toAggregate(row: typeof applications.$inferSelect): AdmissionAggregate {
-  return { state: row.state, cooldownUntil: row.cooldownUntil };
+  return { state: row.state, cooldownUntil: row.cooldownUntil, lane: row.lane };
 }
 
 function admissionEventLogType(
@@ -112,6 +116,7 @@ export async function applyAdmissionEvent(
         .set({
           state: result.aggregate.state,
           cooldownUntil: result.aggregate.cooldownUntil,
+          lane: result.aggregate.lane,
           updatedAt: sql`now()`,
         })
         .where(eq(applications.id, input.applicationId));
