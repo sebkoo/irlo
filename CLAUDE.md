@@ -129,6 +129,13 @@ from a session where the file just changed.
   fenced `mermaid` block with `mmdc` as a mechanical gate. Note this is a syntax guard, not
   a GitHub-render guarantee: `mmdc` rendered the exact block that broke GitHub, a
   version/engine mismatch the gate can't fully close — still the best check available.
+- **`make test-ci` skip carve-out:** pre-push `make test-ci` may be skipped **iff**
+  `git diff -w <green-run SHA> HEAD -- . ':!.claude/state/*'` is empty, with that proof
+  quoted in the push request. Mirrors the review-marker SHA discipline's marker-repoint
+  carve-out (`git diff -w <reviewed-sha> HEAD` empty) below — same mechanical shape,
+  applied to the test-ci gate instead of the review-marker gate. Exceptions are granted
+  by the human, never invented in-flight — a claim about what a diff contains is not
+  evidence of the diff.
 - **Identity scan before every push:** `git log --format='%an %ae' <last-push-sha>..HEAD | sort -u`
   must return exactly one line, `Ben Koo seb.m.koo@gmail.com` (this repo's identity is set
   locally; the global git config is a different identity that must never leak into this
